@@ -19,7 +19,7 @@ public class CameraController2D : MonoBehaviour {
 	
 	public MovementAxis axis = MovementAxis.XZ;
 	public LayerMask cameraBumperLayers;
-	public Transform target;
+	public Transform[] targets;
 	public float distance;
 
 	public bool drawDebugLines;
@@ -28,6 +28,8 @@ public class CameraController2D : MonoBehaviour {
 	System.Func<Vector3> HeightOffset;
 	System.Func<Vector3, Vector3> GetHorizontalComponent;
 	System.Func<Vector3, Vector3> GetVerticalComponent;
+	System.Func<Vector3, float> GetHorizontalValue;
+	System.Func<Vector3, float> GetVerticalValue;
 
 	// These points are used to determine if the camera's ideal position lies within a
 	// camera bumper collider and thus we must stop the screen from moving.  They are
@@ -38,6 +40,15 @@ public class CameraController2D : MonoBehaviour {
 	// than the target is now at.
 	OffsetData[] horizontalRaycastPointOffsets = new OffsetData[2];
 	OffsetData[] verticalRaycastPointOffsets = new OffsetData[2];
+	Stack<IEnumerable<Transform>> targetStack = new Stack<IEnumerable<Transform>>();
+
+	public void AddTarget(Transform target) {
+		AddTarget(new [] { target });
+	}
+
+	public void AddTarget(IEnumerable<Transform> targets) {
+		targetStack.Push(targets);
+	}
 
 	void Start() {
 		switch(axis) {
@@ -48,7 +59,9 @@ public class CameraController2D : MonoBehaviour {
 		case MovementAxis.XZ:
 			HeightOffset = () => -Vector3.up * distance;
 			GetHorizontalComponent = (vector) => new Vector3(vector.x, 0, 0);
+			GetHorizontalValue = (vector) => vector.x;
 			GetVerticalComponent = (vector) => new Vector3(0, 0, vector.z);
+			GetVerticalValue = (vector) => vector.z;
 
 			break;
 //		case MovementAxis.YZ:
@@ -56,9 +69,18 @@ public class CameraController2D : MonoBehaviour {
 //			IdealCameraPosition = () => target.position + HeightOffset();
 //			break;
 		}
+		AddTarget(targets);
 
 		CalculateScreenBounds();
-		IdealCameraPosition = () => target.position - HeightOffset();
+		IdealCameraPosition = () => {
+			var minHorizontal = targetStack.Peek().Min(t => GetHorizontalValue(t.position));
+			var maxHorizontal = targetStack.Peek().Max(t => GetHorizontalValue(t.position));
+			var horizontalOffset = (maxHorizontal - minHorizontal) * 0.5f;
+			var minVertical = targetStack.Peek().Min(t => GetVerticalValue(t.position));
+			var maxVertical = targetStack.Peek().Max(t => GetVerticalValue(t.position));
+			var verticalOffset = (maxVertical - minVertical) * 0.5f;
+			return (GetHorizontalComponent(Vector3.one) * (minHorizontal + horizontalOffset)) + (GetVerticalComponent(Vector3.one) * (minVertical + verticalOffset)) - HeightOffset();
+		};
 
 		transform.position = IdealCameraPosition();
 	}
