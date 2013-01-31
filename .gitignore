@@ -1,0 +1,10 @@
+bin
+Temp
+.DS_Store
+Library/*
+*.userprefs
+Publish
+*.pidb
+*.test-cache
+*.sln
+*.csproj
