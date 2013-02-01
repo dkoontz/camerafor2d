@@ -12,9 +12,10 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	class OffsetData {
+		public Vector3 StartPointRelativeToCamera { get; set; }
 		public Vector3 Vector { get; set; }
 		public Vector3 NormalizedVector { get; set; }
-		public float DistanceFromCenterpoint { get; set; }
+		public float DistanceFromStartPoint { get; set; }
 	}
 	
 	public MovementAxis axis = MovementAxis.XZ;
@@ -30,16 +31,9 @@ public class CameraController2D : MonoBehaviour {
 	System.Func<Vector3, Vector3> GetVerticalComponent;
 	System.Func<Vector3, float> GetHorizontalValue;
 	System.Func<Vector3, float> GetVerticalValue;
-
-	// These points are used to determine if the camera's ideal position lies within a
-	// camera bumper collider and thus we must stop the screen from moving.  They are
-	// calculated as points that are at the four corners of the screen at the target
-	// object's height.  In this way these points are checked at the same "height" as
-	// the player, allowing you to push up against a wall, but then go back, walk up
-	// stairs and walk past the collider since it will exist at a different height
-	// than the target is now at.
-	OffsetData[] horizontalRaycastPointOffsets = new OffsetData[2];
-	OffsetData[] verticalRaycastPointOffsets = new OffsetData[2];
+	
+	OffsetData[] horizontalRaycastPointOffsets = new OffsetData[6];
+	OffsetData[] verticalRaycastPointOffsets = new OffsetData[6];
 	Stack<IEnumerable<Transform>> targetStack = new Stack<IEnumerable<Transform>>();
 
 	public void AddTarget(Transform target) {
@@ -97,26 +91,50 @@ public class CameraController2D : MonoBehaviour {
 			var horizontalVector = GetHorizontalComponent(vectorToIdealPosition);
 			var idealHorizontalDistance = horizontalVector.magnitude;
 			horizontalVector = horizontalVector.normalized * Mathf.Max(idealHorizontalDistance - distanceReductionDueToCollision, 0);
+//			Debug.Log("h: " + distanceReductionDueToCollision);
 
 			distanceReductionDueToCollision = CalculateDistanceReduction(verticalRaycastPointOffsets, idealCenterPoint);
 			var verticalVector = GetVerticalComponent(vectorToIdealPosition);
 			var idealVerticalDistance = verticalVector.magnitude;
 			verticalVector = verticalVector.normalized * Mathf.Max(idealVerticalDistance - distanceReductionDueToCollision, 0);
+			Debug.Log("v: " + distanceReductionDueToCollision);
 
+			if(drawDebugLines) Debug.DrawLine(transform.position, idealPosition, Color.blue);
 			transform.Translate(horizontalVector + verticalVector, Space.World);
 		}
 	}
 
 	void CalculateScreenBounds() {
-		System.Func<Vector3, OffsetData> AddRaycastOffsetPoint = (viewSpacePoint) => {
-			var vectorToOffset = camera.ViewportToWorldPoint(viewSpacePoint) - transform.position;
-			return new OffsetData { Vector = vectorToOffset, NormalizedVector = vectorToOffset.normalized, DistanceFromCenterpoint = vectorToOffset.magnitude };
+		System.Func<Vector3, Vector3, OffsetData> AddRaycastOffsetPoint = (viewSpaceOrigin, viewSpacePoint) => {
+			var origin = camera.ViewportToWorldPoint(viewSpaceOrigin);
+			var vectorToOffset = camera.ViewportToWorldPoint(viewSpacePoint) - origin;
+			Debug.Log("origin: " + origin + ", vectorToOffset: " + vectorToOffset);
+			return new OffsetData { StartPointRelativeToCamera = origin - transform.position, Vector = vectorToOffset, NormalizedVector = vectorToOffset.normalized, DistanceFromStartPoint = vectorToOffset.magnitude };
 		};
 
-		verticalRaycastPointOffsets[0] = AddRaycastOffsetPoint(new Vector3(0.5f, 0));
-		verticalRaycastPointOffsets[1] = AddRaycastOffsetPoint(new Vector3(0.5f, 1));
-		horizontalRaycastPointOffsets[0] = AddRaycastOffsetPoint(new Vector3(0, 0.5f));
-		horizontalRaycastPointOffsets[1] = AddRaycastOffsetPoint(new Vector3(1, 0.5f));
+		horizontalRaycastPointOffsets[0] = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0, 0.5f));
+		horizontalRaycastPointOffsets[1] = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(1, 0.5f));
+		horizontalRaycastPointOffsets[2] = AddRaycastOffsetPoint(new Vector3(0.5f, 0), new Vector3(0, 0));
+		horizontalRaycastPointOffsets[3] = AddRaycastOffsetPoint(new Vector3(0.5f, 0), new Vector3(1, 0));
+		horizontalRaycastPointOffsets[4] = AddRaycastOffsetPoint(new Vector3(0.5f, 1), new Vector3(0, 1));
+		horizontalRaycastPointOffsets[5] = AddRaycastOffsetPoint(new Vector3(0.5f, 1), new Vector3(1, 1));
+//		horizontalRaycastPointOffsets[2] = AddRaycastOffsetPoint(new Vector3(0, 0));
+//		horizontalRaycastPointOffsets[3] = AddRaycastOffsetPoint(new Vector3(1, 0));
+//		horizontalRaycastPointOffsets[4] = AddRaycastOffsetPoint(new Vector3(0, 1));
+//		horizontalRaycastPointOffsets[5] = AddRaycastOffsetPoint(new Vector3(1, 1));
+
+		verticalRaycastPointOffsets[0] = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0.5f, 0));
+		verticalRaycastPointOffsets[1] = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0.5f, 1));
+		verticalRaycastPointOffsets[2] = AddRaycastOffsetPoint(new Vector3(0, 0.5f), new Vector3(0, 0));
+		verticalRaycastPointOffsets[3] = AddRaycastOffsetPoint(new Vector3(0, 0.5f), new Vector3(0, 1));
+		verticalRaycastPointOffsets[4] = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 0));
+		verticalRaycastPointOffsets[5] = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 1));
+
+//		verticalRaycastPointOffsets[2] = AddRaycastOffsetPoint(new Vector3(0, 0));
+//		verticalRaycastPointOffsets[3] = AddRaycastOffsetPoint(new Vector3(1, 0));
+//		verticalRaycastPointOffsets[4] = AddRaycastOffsetPoint(new Vector3(0, 1));
+//		verticalRaycastPointOffsets[5] = AddRaycastOffsetPoint(new Vector3(1, 1));
+
 	}
 
 	float CalculateDistanceReduction(OffsetData[] offsets, Vector3 idealCenterPoint) {
@@ -124,12 +142,12 @@ public class CameraController2D : MonoBehaviour {
 		var distanceReductionDueToCollision = 0f;
 
 		offsets.Each(offset => {
-			if(Physics.Raycast(idealCenterPoint, offset.NormalizedVector, out hitInfo, offset.DistanceFromCenterpoint, cameraBumperLayers)) {
-				var collisionDistance = offset.DistanceFromCenterpoint - hitInfo.distance;
+			if(Physics.Raycast(idealCenterPoint + offset.StartPointRelativeToCamera, offset.NormalizedVector, out hitInfo, offset.DistanceFromStartPoint, cameraBumperLayers)) {
+				var collisionDistance = offset.DistanceFromStartPoint - hitInfo.distance;
 				if(collisionDistance > distanceReductionDueToCollision) distanceReductionDueToCollision = collisionDistance;
-				if(drawDebugLines) Debug.DrawLine(idealCenterPoint, idealCenterPoint + (offset.NormalizedVector * hitInfo.distance), Color.red);
+				if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + (offset.NormalizedVector * hitInfo.distance), Color.red);
 			}
-			else if(drawDebugLines) Debug.DrawLine(idealCenterPoint, idealCenterPoint + offset.Vector, Color.green);
+			else if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + offset.Vector, Color.green);
 		});
 		return distanceReductionDueToCollision;
 	}
