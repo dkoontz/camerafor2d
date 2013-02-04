@@ -32,8 +32,19 @@ public class CameraController2D : MonoBehaviour {
 	System.Func<Vector3, float> GetHorizontalValue;
 	System.Func<Vector3, float> GetVerticalValue;
 	
-	OffsetData[] horizontalRaycastPointOffsets = new OffsetData[6];
-	OffsetData[] verticalRaycastPointOffsets = new OffsetData[6];
+	OffsetData leftRaycastPoint;
+	OffsetData upperLeftRaycastPoint;
+	OffsetData lowerLeftRaycastPoint;
+	OffsetData rightRaycastPoint;
+	OffsetData upperRightRaycastPoint;
+	OffsetData lowerRightRaycastPoint;
+
+	OffsetData upRaycastPoint;
+	OffsetData downRaycastPoint;
+	OffsetData leftUpRaycastPoint;
+	OffsetData rightUpRaycastPoint;
+	OffsetData leftDownRaycastPoint;
+	OffsetData rightDownRaycastPoint;
 	Stack<IEnumerable<Transform>> targetStack = new Stack<IEnumerable<Transform>>();
 
 	public void AddTarget(Transform target) {
@@ -44,7 +55,7 @@ public class CameraController2D : MonoBehaviour {
 		targetStack.Push(targets);
 	}
 
-	void Start() {
+	public void Start() {
 		switch(axis) {
 //		case MovementAxis.XY:
 //			HeightOffset = () => Vector3.forward * distance;
@@ -79,56 +90,127 @@ public class CameraController2D : MonoBehaviour {
 		transform.position = IdealCameraPosition();
 	}
 	
-	void LateUpdate() {
+	public void LateUpdate() {
 		var idealPosition = IdealCameraPosition();
-		var distanceToIdealPosition = (idealPosition - transform.position).magnitude;
+		var vectorToIdealPosition = (idealPosition - transform.position);
+		var normalizedVectorToIdealPosition = vectorToIdealPosition.normalized;
+		var distanceToIdealPosition = vectorToIdealPosition.magnitude;
 
-		if(distanceToIdealPosition > 0) {
-			var shortestDistance = distanceToIdealPosition;
-			var idealCenterPoint = idealPosition + HeightOffset();
-			var distanceReductionDueToCollision = CalculateDistanceReduction(horizontalRaycastPointOffsets, idealCenterPoint);
-			var vectorToIdealPosition = idealPosition - transform.position;
-			var horizontalVector = GetHorizontalComponent(vectorToIdealPosition);
-			var idealHorizontalDistance = horizontalVector.magnitude;
-			horizontalVector = horizontalVector.normalized * Mathf.Max(idealHorizontalDistance - distanceReductionDueToCollision, 0);
-//			Debug.Log("h: " + distanceReductionDueToCollision);
+//		if(distanceToIdealPosition > 0) {
+//			var shortestDistance = distanceToIdealPosition;
+			var idealCenterPointAtPlayerHeight = idealPosition + HeightOffset();
+//			var horizontalDistanceReductionDueToCollision = 0;
+//			var verticalDistanceReductionDueToCollision = 0;
+//
+//			// check left horizontal and if not blocked, left side vertical
+//			var leftCheck = CalculateDistanceReduction(leftRaycastPoint, idealCenterPoint);
+//			if(leftCheck > 0) {
+//				horizontalDistanceReductionDueToCollision = leftCheck;
+//
+//			}
+//
+//		}
+			var horizontalVector = GetHorizontalComponent(Vector3.one).normalized;
+			var verticalVector = GetVerticalComponent(Vector3.one).normalized;
 
-			distanceReductionDueToCollision = CalculateDistanceReduction(verticalRaycastPointOffsets, idealCenterPoint);
-			var verticalVector = GetVerticalComponent(vectorToIdealPosition);
-			var idealVerticalDistance = verticalVector.magnitude;
-			verticalVector = verticalVector.normalized * Mathf.Max(idealVerticalDistance - distanceReductionDueToCollision, 0);
-			Debug.Log("v: " + distanceReductionDueToCollision);
+			Debug.DrawLine(transform.position, idealPosition, Color.green);
+			var horizontalDotProduct = Vector3.Dot(horizontalVector, normalizedVectorToIdealPosition);
+			var horizontalFacing = 0;
+			if(horizontalDotProduct > 0) horizontalFacing = 1;
+			else if(horizontalDotProduct < 0) horizontalFacing = -1;
+			
+			var verticalFacing = 0;
+			var verticalDotProduct = Vector3.Dot(verticalVector, normalizedVectorToIdealPosition);
+			if(verticalDotProduct > 0) verticalFacing = 1;
+			else if(verticalDotProduct < 0) verticalFacing = -1;
 
-			if(drawDebugLines) Debug.DrawLine(transform.position, idealPosition, Color.blue);
-			transform.Translate(horizontalVector + verticalVector, Space.World);
-		}
+			var horizontalPushBack = 0f;
+			var verticalPushBack = 0f;
+
+//			Debug.Log("Horizontal: " + horizontalFacing + ", vertical: " + verticalFacing);
+
+			
+			horizontalPushBack = Mathf.Max(horizontalPushBack, CalculatePushback(rightRaycastPoint, idealCenterPointAtPlayerHeight));
+			if(0 == horizontalPushBack) {
+				if(1 == verticalFacing) {
+					verticalPushBack = Mathf.Max(verticalPushBack, CalculatePushback(rightUpRaycastPoint, idealCenterPointAtPlayerHeight));
+				}
+				else if(-1 == verticalFacing) {
+					verticalPushBack = Mathf.Max(verticalPushBack, CalculatePushback(rightDownRaycastPoint, idealCenterPointAtPlayerHeight));
+				}
+			}
+		    horizontalPushBack = Mathf.Max(horizontalPushBack, CalculatePushback(leftRaycastPoint, idealCenterPointAtPlayerHeight));
+			if(0 == horizontalPushBack) {
+				if(1 == verticalFacing) {
+					verticalPushBack = Mathf.Max(verticalPushBack, CalculatePushback(leftUpRaycastPoint, idealCenterPointAtPlayerHeight));
+				}
+				else if(-1 == verticalFacing) {
+					verticalPushBack = Mathf.Max(verticalPushBack, CalculatePushback(leftDownRaycastPoint, idealCenterPointAtPlayerHeight));
+				}
+			}
+		
+            verticalPushBack = Mathf.Max(verticalPushBack, CalculatePushback(upRaycastPoint, idealCenterPointAtPlayerHeight));
+			if(0 == verticalPushBack) {
+				if(1 == horizontalFacing) {
+					horizontalPushBack = Mathf.Max(horizontalPushBack, CalculatePushback(upperRightRaycastPoint, idealCenterPointAtPlayerHeight));
+				}
+				else if(-1 == horizontalFacing) {
+					horizontalPushBack = Mathf.Max(horizontalPushBack, CalculatePushback(upperLeftRaycastPoint, idealCenterPointAtPlayerHeight));
+				}
+			}
+			verticalPushBack = Mathf.Max(verticalPushBack, CalculatePushback(downRaycastPoint, idealCenterPointAtPlayerHeight));
+			if(0 == verticalPushBack) {
+				if(1 == horizontalFacing) {
+					horizontalPushBack = Mathf.Max(horizontalPushBack, CalculatePushback(lowerRightRaycastPoint, idealCenterPointAtPlayerHeight));
+				}
+				else if(-1 == horizontalFacing) {
+					horizontalPushBack = Mathf.Max(horizontalPushBack, CalculatePushback(lowerLeftRaycastPoint, idealCenterPointAtPlayerHeight));
+				}
+			}
+		
+//			var horizontalVector = GetHorizontalComponent(vectorToIdealPosition);
+//			var idealHorizontalDistance = horizontalVector.magnitude;
+//			horizontalVector = horizontalVector.normalized * Mathf.Max(idealHorizontalDistance - horizontalPushBack, 0);
+//			//			Debug.Log("h: " + distanceReductionDueToCollision);
+//			
+//			var vertiallDistanceReductionDueToCollision = CalculateDistanceReduction(verticalRaycastPointOffsets, idealCenterPoint);
+//			var verticalVector = GetVerticalComponent(vectorToIdealPosition);
+//			var idealVerticalDistance = verticalVector.magnitude;
+//			verticalVector = verticalVector.normalized * Mathf.Max(idealVerticalDistance - vertiallDistanceReductionDueToCollision, 0);
+//			//			Debug.Log("v: " + distanceReductionDueToCollision);
+//			
+//			if(drawDebugLines) Debug.DrawLine(transform.position, idealPosition, Color.blue);
+//			transform.Translate(horizontalVector + verticalVector, Space.World);
+//			Debug.Log("horizontal: " + (horizontalVector * -horizontalPushBack) + ", vertical: " + (verticalVector * -verticalPushBack));
+			transform.position = IdealCameraPosition() + (verticalVector * -verticalPushBack * verticalFacing) + (horizontalVector * -horizontalPushBack * horizontalFacing);
+//		}
 	}
 
 	void CalculateScreenBounds() {
 		System.Func<Vector3, Vector3, OffsetData> AddRaycastOffsetPoint = (viewSpaceOrigin, viewSpacePoint) => {
 			var origin = camera.ViewportToWorldPoint(viewSpaceOrigin);
 			var vectorToOffset = camera.ViewportToWorldPoint(viewSpacePoint) - origin;
-			Debug.Log("origin: " + origin + ", vectorToOffset: " + vectorToOffset);
+//			Debug.Log("origin: " + origin + ", vectorToOffset: " + vectorToOffset);
 			return new OffsetData { StartPointRelativeToCamera = origin - transform.position, Vector = vectorToOffset, NormalizedVector = vectorToOffset.normalized, DistanceFromStartPoint = vectorToOffset.magnitude };
 		};
 
-		horizontalRaycastPointOffsets[0] = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0, 0.5f));
-		horizontalRaycastPointOffsets[1] = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(1, 0.5f));
-		horizontalRaycastPointOffsets[2] = AddRaycastOffsetPoint(new Vector3(0.5f, 0), new Vector3(0, 0));
-		horizontalRaycastPointOffsets[3] = AddRaycastOffsetPoint(new Vector3(0.5f, 0), new Vector3(1, 0));
-		horizontalRaycastPointOffsets[4] = AddRaycastOffsetPoint(new Vector3(0.5f, 1), new Vector3(0, 1));
-		horizontalRaycastPointOffsets[5] = AddRaycastOffsetPoint(new Vector3(0.5f, 1), new Vector3(1, 1));
+		leftRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0, 0.5f));
+		rightRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(1, 0.5f));
+		lowerLeftRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 0), new Vector3(0, 0));
+		lowerRightRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 0), new Vector3(1, 0));
+		upperLeftRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 1), new Vector3(0, 1));
+		upperRightRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 1), new Vector3(1, 1));
 //		horizontalRaycastPointOffsets[2] = AddRaycastOffsetPoint(new Vector3(0, 0));
 //		horizontalRaycastPointOffsets[3] = AddRaycastOffsetPoint(new Vector3(1, 0));
 //		horizontalRaycastPointOffsets[4] = AddRaycastOffsetPoint(new Vector3(0, 1));
 //		horizontalRaycastPointOffsets[5] = AddRaycastOffsetPoint(new Vector3(1, 1));
 
-		verticalRaycastPointOffsets[0] = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0.5f, 0));
-		verticalRaycastPointOffsets[1] = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0.5f, 1));
-		verticalRaycastPointOffsets[2] = AddRaycastOffsetPoint(new Vector3(0, 0.5f), new Vector3(0, 0));
-		verticalRaycastPointOffsets[3] = AddRaycastOffsetPoint(new Vector3(0, 0.5f), new Vector3(0, 1));
-		verticalRaycastPointOffsets[4] = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 0));
-		verticalRaycastPointOffsets[5] = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 1));
+		downRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0.5f, 0));
+		upRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0.5f, 1));
+		leftDownRaycastPoint = AddRaycastOffsetPoint(new Vector3(0, 0.5f), new Vector3(0, 0));
+		leftUpRaycastPoint = AddRaycastOffsetPoint(new Vector3(0, 0.5f), new Vector3(0, 1));
+		rightDownRaycastPoint = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 0));
+		rightUpRaycastPoint = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 1));
 
 //		verticalRaycastPointOffsets[2] = AddRaycastOffsetPoint(new Vector3(0, 0));
 //		verticalRaycastPointOffsets[3] = AddRaycastOffsetPoint(new Vector3(1, 0));
@@ -137,18 +219,16 @@ public class CameraController2D : MonoBehaviour {
 
 	}
 
-	float CalculateDistanceReduction(OffsetData[] offsets, Vector3 idealCenterPoint) {
+	float CalculatePushback(OffsetData offset, Vector3 idealCenterPoint) {
 		RaycastHit hitInfo;
-		var distanceReductionDueToCollision = 0f;
+		var pushbackDueToCollision = 0f;
 
-		offsets.Each(offset => {
-			if(Physics.Raycast(idealCenterPoint + offset.StartPointRelativeToCamera, offset.NormalizedVector, out hitInfo, offset.DistanceFromStartPoint, cameraBumperLayers)) {
-				var collisionDistance = offset.DistanceFromStartPoint - hitInfo.distance;
-				if(collisionDistance > distanceReductionDueToCollision) distanceReductionDueToCollision = collisionDistance;
-				if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + (offset.NormalizedVector * hitInfo.distance), Color.red);
-			}
-			else if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + offset.Vector, Color.green);
-		});
-		return distanceReductionDueToCollision;
+		if(Physics.Raycast(idealCenterPoint + offset.StartPointRelativeToCamera, offset.NormalizedVector, out hitInfo, offset.DistanceFromStartPoint, cameraBumperLayers)) {
+			if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + (offset.NormalizedVector * hitInfo.distance), Color.red);
+			pushbackDueToCollision = offset.DistanceFromStartPoint - hitInfo.distance;
+		}
+		else if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + offset.Vector, Color.green);
+
+		return pushbackDueToCollision;
 	}
 }
