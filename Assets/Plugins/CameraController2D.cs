@@ -22,6 +22,7 @@ public class CameraController2D : MonoBehaviour {
 	public LayerMask cameraBumperLayers;
 	public Transform[] targets;
 	public float distance;
+	public float maxMoveSpeedPerSecond = 1;
 
 	public bool drawDebugLines;
 
@@ -96,20 +97,8 @@ public class CameraController2D : MonoBehaviour {
 		var normalizedVectorToIdealPosition = vectorToIdealPosition.normalized;
 		var distanceToIdealPosition = vectorToIdealPosition.magnitude;
 
-//		if(distanceToIdealPosition > 0) {
-//			var shortestDistance = distanceToIdealPosition;
+		if(distanceToIdealPosition > 0) {
 			var idealCenterPointAtPlayerHeight = idealPosition + HeightOffset();
-//			var horizontalDistanceReductionDueToCollision = 0;
-//			var verticalDistanceReductionDueToCollision = 0;
-//
-//			// check left horizontal and if not blocked, left side vertical
-//			var leftCheck = CalculateDistanceReduction(leftRaycastPoint, idealCenterPoint);
-//			if(leftCheck > 0) {
-//				horizontalDistanceReductionDueToCollision = leftCheck;
-//
-//			}
-//
-//		}
 			var horizontalVector = GetHorizontalComponent(Vector3.one).normalized;
 			var verticalVector = GetVerticalComponent(Vector3.one).normalized;
 
@@ -127,9 +116,6 @@ public class CameraController2D : MonoBehaviour {
 			var horizontalPushBack = 0f;
 			var verticalPushBack = 0f;
 
-//			Debug.Log("Horizontal: " + horizontalFacing + ", vertical: " + verticalFacing);
-
-			
 			horizontalPushBack = Mathf.Max(horizontalPushBack, CalculatePushback(rightRaycastPoint, idealCenterPointAtPlayerHeight));
 			if(0 == horizontalPushBack) {
 				if(1 == verticalFacing) {
@@ -168,22 +154,10 @@ public class CameraController2D : MonoBehaviour {
 				}
 			}
 		
-//			var horizontalVector = GetHorizontalComponent(vectorToIdealPosition);
-//			var idealHorizontalDistance = horizontalVector.magnitude;
-//			horizontalVector = horizontalVector.normalized * Mathf.Max(idealHorizontalDistance - horizontalPushBack, 0);
-//			//			Debug.Log("h: " + distanceReductionDueToCollision);
-//			
-//			var vertiallDistanceReductionDueToCollision = CalculateDistanceReduction(verticalRaycastPointOffsets, idealCenterPoint);
-//			var verticalVector = GetVerticalComponent(vectorToIdealPosition);
-//			var idealVerticalDistance = verticalVector.magnitude;
-//			verticalVector = verticalVector.normalized * Mathf.Max(idealVerticalDistance - vertiallDistanceReductionDueToCollision, 0);
-//			//			Debug.Log("v: " + distanceReductionDueToCollision);
-//			
-//			if(drawDebugLines) Debug.DrawLine(transform.position, idealPosition, Color.blue);
-//			transform.Translate(horizontalVector + verticalVector, Space.World);
-//			Debug.Log("horizontal: " + (horizontalVector * -horizontalPushBack) + ", vertical: " + (verticalVector * -verticalPushBack));
-			transform.position = IdealCameraPosition() + (verticalVector * -verticalPushBack * verticalFacing) + (horizontalVector * -horizontalPushBack * horizontalFacing);
-//		}
+			var targetVector = (idealPosition + (verticalVector * -verticalPushBack * verticalFacing) + (horizontalVector * -horizontalPushBack * horizontalFacing)) - transform.position;
+			transform.Translate(targetVector.normalized * Mathf.Min(targetVector.magnitude, maxMoveSpeedPerSecond * Time.deltaTime), Space.World);
+//			transform.position = idealPosition + (verticalVector * -verticalPushBack * verticalFacing) + (horizontalVector * -horizontalPushBack * horizontalFacing);
+		}
 	}
 
 	void CalculateScreenBounds() {
