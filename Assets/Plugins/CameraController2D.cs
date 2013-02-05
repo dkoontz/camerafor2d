@@ -79,6 +79,8 @@ public class CameraController2D : MonoBehaviour {
 
 		CalculateScreenBounds();
 		IdealCameraPosition = () => {
+			if(1 == targetStack.Peek ().Count()) return targetStack.Peek().First().position - HeightOffset();
+
 			var minHorizontal = targetStack.Peek().Min(t => GetHorizontalValue(t.position));
 			var maxHorizontal = targetStack.Peek().Max(t => GetHorizontalValue(t.position));
 			var horizontalOffset = (maxHorizontal - minHorizontal) * 0.5f;
@@ -94,7 +96,6 @@ public class CameraController2D : MonoBehaviour {
 	public void LateUpdate() {
 		var idealPosition = IdealCameraPosition();
 		var vectorToIdealPosition = (idealPosition - transform.position);
-		var normalizedVectorToIdealPosition = vectorToIdealPosition.normalized;
 		var distanceToIdealPosition = vectorToIdealPosition.magnitude;
 
 		if(distanceToIdealPosition > 0) {
@@ -167,7 +168,6 @@ public class CameraController2D : MonoBehaviour {
 			}
 
 			downVerticalPushBack = CalculatePushback(downRaycastPoint, idealCenterPointAtPlayerHeight);
-
 			if(downVerticalPushBack > verticalPushBack)  {
 				verticalPushBack = downVerticalPushBack;
 				verticalFacing = -1;
@@ -206,10 +206,10 @@ public class CameraController2D : MonoBehaviour {
 
 		downRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0.5f, 0));
 		upRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0.5f, 1));
-		leftDownRaycastPoint = AddRaycastOffsetPoint(new Vector3(0, 0.5f), new Vector3(0, 0));
 		leftUpRaycastPoint = AddRaycastOffsetPoint(new Vector3(0, 0.5f), new Vector3(0, 1));
-		rightDownRaycastPoint = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 0));
+		leftDownRaycastPoint = AddRaycastOffsetPoint(new Vector3(0, 0.5f), new Vector3(0, 0));
 		rightUpRaycastPoint = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 1));
+		rightDownRaycastPoint = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 0));
 	}
 
 	float CalculatePushback(OffsetData offset, Vector3 idealCenterPoint) {
