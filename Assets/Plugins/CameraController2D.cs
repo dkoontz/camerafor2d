@@ -20,9 +20,9 @@ public class CameraController2D : MonoBehaviour {
 	
 	public MovementAxis axis = MovementAxis.XZ;
 	public LayerMask cameraBumperLayers;
-	public Transform[] targets;
 	public float distance;
 	public float maxMoveSpeedPerSecond = 1;
+	public Transform initialTarget;
 
 	public bool drawDebugLines;
 
@@ -46,14 +46,39 @@ public class CameraController2D : MonoBehaviour {
 	OffsetData rightUpRaycastPoint;
 	OffsetData leftDownRaycastPoint;
 	OffsetData rightDownRaycastPoint;
+
 	Stack<IEnumerable<Transform>> targetStack = new Stack<IEnumerable<Transform>>();
+	bool panningToNewTarget;
+	float panningToNewTargetSpeed;
 
 	public void AddTarget(Transform target) {
 		AddTarget(new [] { target });
 	}
 
+	public void AddTarget(Transform target, float moveSpeed) {
+		AddTarget(new [] { target }, moveSpeed);
+	}
+
+	public void AddTarget(Transform target, float moveSpeed, float revertAfterDuration, bool snapBackWhenReverting) {
+		AddTarget(new [] { target }, moveSpeed, revertAfterDuration, snapBackWhenReverting);
+	}
+
 	public void AddTarget(IEnumerable<Transform> targets) {
 		targetStack.Push(targets);
+		panningToNewTarget = true;
+	}
+
+	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed) {
+		targetStack.Push(targets);
+		panningToNewTarget = true;
+		panningToNewTargetSpeed = moveSpeed;
+	}
+
+	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed, float revertAfterDuration, bool snapBackWhenReverting) {
+		targetStack.Push(targets);
+		panningToNewTarget = true;
+		panningToNewTargetSpeed = moveSpeed;
+		StartCoroutine(RemoveTargetAfterDelay(revertAfterDuration, snapBackWhenReverting));
 	}
 
 	public void Start() {
@@ -75,7 +100,7 @@ public class CameraController2D : MonoBehaviour {
 //			IdealCameraPosition = () => target.position + HeightOffset();
 //			break;
 		}
-		AddTarget(targets);
+		AddTarget(initialTarget);
 
 		CalculateScreenBounds();
 		IdealCameraPosition = () => {
@@ -90,7 +115,7 @@ public class CameraController2D : MonoBehaviour {
 			return (GetHorizontalComponent(Vector3.one) * (minHorizontal + horizontalOffset)) + (GetVerticalComponent(Vector3.one) * (minVertical + verticalOffset)) - HeightOffset();
 		};
 
-		transform.position = IdealCameraPosition();
+		JumpToIdealPosition();
 	}
 	
 	public void LateUpdate() {
@@ -98,7 +123,10 @@ public class CameraController2D : MonoBehaviour {
 		var vectorToIdealPosition = (idealPosition - transform.position);
 		var distanceToIdealPosition = vectorToIdealPosition.magnitude;
 
-		if(distanceToIdealPosition > 0) {
+		if(distanceToIdealPosition == 0) {
+			panningToNewTarget = false;
+		}
+		else {
 			var idealCenterPointAtPlayerHeight = idealPosition + HeightOffset();
 			var horizontalVector = GetHorizontalComponent(Vector3.one).normalized;
 			var verticalVector = GetVerticalComponent(Vector3.one).normalized;
@@ -113,81 +141,89 @@ public class CameraController2D : MonoBehaviour {
 			var upVerticalPushBack = 0f;
 			var downVerticalPushBack = 0f;
 
-			rightHorizontalPushBack = CalculatePushback(rightRaycastPoint, idealCenterPointAtPlayerHeight);
+			rightHorizontalPushBack = CalculatePushback(rightRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalPositive);
 			if(rightHorizontalPushBack > horizontalPushBack) {
 				horizontalPushBack = rightHorizontalPushBack;
 				horizontalFacing = 1;
 			}
 			if(0 == rightHorizontalPushBack) {
-				upVerticalPushBack = CalculatePushback(rightUpRaycastPoint, idealCenterPointAtPlayerHeight);
+				upVerticalPushBack = CalculatePushback(rightUpRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalPositive);
 				if(upVerticalPushBack > verticalPushBack) {
 					verticalPushBack = upVerticalPushBack;
 					verticalFacing = 1;
 				}
-				downVerticalPushBack = CalculatePushback(rightDownRaycastPoint, idealCenterPointAtPlayerHeight);
+				downVerticalPushBack = CalculatePushback(rightDownRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalNegative);
 				if(downVerticalPushBack > verticalPushBack) {
 					verticalPushBack = downVerticalPushBack;
 					verticalFacing = -1;
 				}
 			}
 
-			leftHorizontalPushBack = CalculatePushback(leftRaycastPoint, idealCenterPointAtPlayerHeight);
+			leftHorizontalPushBack = CalculatePushback(leftRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalNegative);
 			if(leftHorizontalPushBack > horizontalPushBack) {
 				horizontalPushBack = leftHorizontalPushBack;
 				horizontalFacing = -1;
 			}
 			if(0 == leftHorizontalPushBack) {
-				upVerticalPushBack = CalculatePushback(leftUpRaycastPoint, idealCenterPointAtPlayerHeight);
+				upVerticalPushBack = CalculatePushback(leftUpRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalPositive);
 				if(upVerticalPushBack > verticalPushBack) {
 					verticalPushBack = upVerticalPushBack;
 					verticalFacing = 1;
 				}
-				downVerticalPushBack = CalculatePushback(leftDownRaycastPoint, idealCenterPointAtPlayerHeight);
+				downVerticalPushBack = CalculatePushback(leftDownRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalNegative);
 				if(downVerticalPushBack > verticalPushBack) {
 					verticalPushBack = downVerticalPushBack;
 					verticalFacing = -1;
 				}
 			}
 		
-			upVerticalPushBack = CalculatePushback(upRaycastPoint, idealCenterPointAtPlayerHeight);
+			upVerticalPushBack = CalculatePushback(upRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalPositive);
 			if(upVerticalPushBack > verticalPushBack) {
 				verticalPushBack = upVerticalPushBack;
 				verticalFacing = 1;
 			}
 			if(0 == upVerticalPushBack) {
-				rightHorizontalPushBack = CalculatePushback(upperRightRaycastPoint, idealCenterPointAtPlayerHeight);
+				rightHorizontalPushBack = CalculatePushback(upperRightRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalPositive);
 				if(rightHorizontalPushBack > horizontalPushBack) {
 					horizontalPushBack = rightHorizontalPushBack;
 					horizontalFacing = 1;
 				}
-				leftHorizontalPushBack = CalculatePushback(upperLeftRaycastPoint, idealCenterPointAtPlayerHeight);
+				leftHorizontalPushBack = CalculatePushback(upperLeftRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalNegative);
 				if(leftHorizontalPushBack > horizontalPushBack) {
 					horizontalPushBack = leftHorizontalPushBack;
 					horizontalFacing = -1;
 				}
 			}
 
-			downVerticalPushBack = CalculatePushback(downRaycastPoint, idealCenterPointAtPlayerHeight);
+			downVerticalPushBack = CalculatePushback(downRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalNegative);
 			if(downVerticalPushBack > verticalPushBack)  {
 				verticalPushBack = downVerticalPushBack;
 				verticalFacing = -1;
 			}
 			if(0 == downVerticalPushBack) {
-				rightHorizontalPushBack = CalculatePushback(lowerRightRaycastPoint, idealCenterPointAtPlayerHeight);
+				rightHorizontalPushBack = CalculatePushback(lowerRightRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalPositive);
 				if(rightHorizontalPushBack > horizontalPushBack) {
 					horizontalPushBack = rightHorizontalPushBack;
 					horizontalFacing = 1;
 				}
-				leftHorizontalPushBack = CalculatePushback(lowerLeftRaycastPoint, idealCenterPointAtPlayerHeight);
+				leftHorizontalPushBack = CalculatePushback(lowerLeftRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalNegative);
 				if(leftHorizontalPushBack > horizontalPushBack) {
 					horizontalPushBack = leftHorizontalPushBack;
 					horizontalFacing = -1;
 				}
 			}
 		
+//			Debug.DrawLine(transform.position, idealPosition, Color.blue);
+//			Debug.Log("vertical pushback: " + verticalPushBack);
 			var targetVector = (idealPosition + (verticalVector * -verticalPushBack * verticalFacing) + (horizontalVector * -horizontalPushBack * horizontalFacing)) - transform.position;
-			transform.Translate(targetVector.normalized * Mathf.Min(targetVector.magnitude, maxMoveSpeedPerSecond * Time.deltaTime), Space.World);
+			var moveSpeed = maxMoveSpeedPerSecond;
+			if(panningToNewTarget) moveSpeed = panningToNewTargetSpeed;
+			transform.Translate(targetVector.normalized * Mathf.Min(targetVector.magnitude, moveSpeed * Time.deltaTime), Space.World);
 		}
+	}
+
+	public void JumpToIdealPosition() {
+		transform.position = IdealCameraPosition();
 	}
 
 	void CalculateScreenBounds() {
@@ -212,16 +248,26 @@ public class CameraController2D : MonoBehaviour {
 		rightDownRaycastPoint = AddRaycastOffsetPoint(new Vector3(1, 0.5f), new Vector3(1, 0));
 	}
 
-	float CalculatePushback(OffsetData offset, Vector3 idealCenterPoint) {
+	float CalculatePushback(OffsetData offset, Vector3 idealCenterPoint, CameraBumper.BumperDirection validDirections = CameraBumper.BumperDirection.AllDirections) {
 		RaycastHit hitInfo;
 		var pushbackDueToCollision = 0f;
 
 		if(Physics.Raycast(idealCenterPoint + offset.StartPointRelativeToCamera, offset.NormalizedVector, out hitInfo, offset.DistanceFromStartPoint, cameraBumperLayers)) {
-			pushbackDueToCollision = offset.DistanceFromStartPoint - hitInfo.distance;
-			if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + (offset.NormalizedVector * hitInfo.distance), Color.red);
+			var bumper = hitInfo.collider.GetComponent<CameraBumper>();
+			if(null == bumper || (bumper != null && (bumper.blockDirection & validDirections) != CameraBumper.BumperDirection.None)) {
+				pushbackDueToCollision = offset.DistanceFromStartPoint - hitInfo.distance;
+				if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + (offset.NormalizedVector * hitInfo.distance), Color.red);
+			}
 		}
 		else if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + offset.Vector, Color.green);
 
 		return pushbackDueToCollision;
+	}
+
+	IEnumerator RemoveTargetAfterDelay(float delay, bool snapBack) {
+		yield return new WaitForSeconds(delay);
+		panningToNewTarget = true;
+		if(snapBack) panningToNewTargetSpeed = float.MaxValue;
+		targetStack.Pop();
 	}
 }

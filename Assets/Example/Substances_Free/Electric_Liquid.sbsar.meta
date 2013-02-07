@@ -17,14 +17,14 @@ SubstanceImporter:
         texture: {instanceID: 0}
     - name: $randomseed
       value:
-        scalar[0]: 116
+        scalar[0]: 1325
         scalar[1]: 0
         scalar[2]: 0
         scalar[3]: 0
         texture: {instanceID: 0}
     - name: Flow
       value:
-        scalar[0]: 0
+        scalar[0]: 958
         scalar[1]: 0
         scalar[2]: 0
         scalar[3]: 0
@@ -45,9 +45,9 @@ SubstanceImporter:
         texture: {instanceID: 0}
     - name: Liquid_Color
       value:
-        scalar[0]: .441635132
-        scalar[1]: .910447776
-        scalar[2]: .458027184
+        scalar[0]: .805970132
+        scalar[1]: .405719072
+        scalar[2]: .336823344
         scalar[3]: 0
         texture: {instanceID: 0}
     - name: Hue_Shift
