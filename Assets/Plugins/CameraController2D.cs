@@ -59,8 +59,8 @@ public class CameraController2D : MonoBehaviour {
 		AddTarget(new [] { target }, moveSpeed);
 	}
 
-	public void AddTarget(Transform target, float moveSpeed, float revertAfterDuration, bool snapBackWhenReverting) {
-		AddTarget(new [] { target }, moveSpeed, revertAfterDuration, snapBackWhenReverting);
+	public void AddTarget(Transform target, float moveSpeed, float revertAfterDuration, float revertMoveSpeed) {
+		AddTarget(new [] { target }, moveSpeed, revertAfterDuration, revertMoveSpeed);
 	}
 
 	public void AddTarget(IEnumerable<Transform> targets) {
@@ -74,11 +74,11 @@ public class CameraController2D : MonoBehaviour {
 		panningToNewTargetSpeed = moveSpeed;
 	}
 
-	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed, float revertAfterDuration, bool snapBackWhenReverting) {
+	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed, float revertAfterDuration, float revertMoveSpeed) {
 		targetStack.Push(targets);
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
-		StartCoroutine(RemoveTargetAfterDelay(revertAfterDuration, snapBackWhenReverting));
+		StartCoroutine(RemoveTargetAfterDelay(revertAfterDuration, revertMoveSpeed));
 	}
 
 	public void Start() {
@@ -264,10 +264,10 @@ public class CameraController2D : MonoBehaviour {
 		return pushbackDueToCollision;
 	}
 
-	IEnumerator RemoveTargetAfterDelay(float delay, bool snapBack) {
+	IEnumerator RemoveTargetAfterDelay(float delay, float revertMoveSpeed) {
 		yield return new WaitForSeconds(delay);
 		panningToNewTarget = true;
-		if(snapBack) panningToNewTargetSpeed = float.MaxValue;
+		panningToNewTargetSpeed = revertMoveSpeed;
 		targetStack.Pop();
 	}
 }

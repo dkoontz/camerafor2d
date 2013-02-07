@@ -7,11 +7,11 @@ public class AddCameraTargetWhenTouched : MonoBehaviour {
 	public float moveSpeed;
 	public bool removeTargetAfterDelay;
 	public float delay = 5;
-	public bool snapBackAfterDelay;
+	public float revertMoveSpeed;
 
 	void OnTriggerEnter() {
 		if(removeTargetAfterDelay) {
-			Camera.main.GetComponent<CameraController2D>().AddTarget(target, moveSpeed, delay, snapBackAfterDelay);
+			Camera.main.GetComponent<CameraController2D>().AddTarget(target, moveSpeed, delay, revertMoveSpeed);
 		}
 		else {
 			Camera.main.GetComponent<CameraController2D>().AddTarget(target, moveSpeed);
