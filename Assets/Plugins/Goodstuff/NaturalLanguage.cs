@@ -75,16 +75,9 @@ namespace GoodStuff
 		
 		public static class FloatExtensions {
 			/// <summary>
-			/// Maps a value in one range to the equivalent value in another range.
-			/// </summary>
-			public static float MapToRange(this float value, float range1Min, float range1Max, float range2Min, float range2Max) {
-				return MapToRange(value, range1Min, range1Max, range2Min, range2Max, true);
-			}
-				
-			/// <summary>
 			/// Maps a value in one range to the equivalent value in another range.  Clamps the value to be valid within the range if clamp is specified as true.
 			/// </summary>
-			public static float MapToRange(this float value, float range1Min, float range1Max, float range2Min, float range2Max, bool clamp) {
+			public static float MapToRange(this float value, float range1Min, float range1Max, float range2Min, float range2Max, bool clamp = true) {
 				
 				value = range2Min + ((value - range1Min) / (range1Max - range1Min)) * (range2Max - range2Min);
 				

@@ -22,6 +22,7 @@ public class CameraController2D : MonoBehaviour {
 	public LayerMask cameraBumperLayers;
 	public float distance;
 	public float maxMoveSpeedPerSecond = 1;
+	public float softArrivalDistance;
 	public Transform initialTarget;
 
 	public bool drawDebugLines;
@@ -66,6 +67,7 @@ public class CameraController2D : MonoBehaviour {
 	public void AddTarget(IEnumerable<Transform> targets) {
 		targetStack.Push(targets);
 		panningToNewTarget = true;
+		panningToNewTargetSpeed = maxMoveSpeedPerSecond;
 	}
 
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed) {
@@ -79,6 +81,12 @@ public class CameraController2D : MonoBehaviour {
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
 		StartCoroutine(RemoveTargetAfterDelay(revertAfterDuration, revertMoveSpeed));
+	}
+
+	public void RemoveCurrentTarget() {
+		targetStack.Pop();
+		panningToNewTarget = true;
+		panningToNewTargetSpeed = maxMoveSpeedPerSecond;
 	}
 
 	public void Start() {
@@ -123,7 +131,8 @@ public class CameraController2D : MonoBehaviour {
 		var vectorToIdealPosition = (idealPosition - transform.position);
 		var distanceToIdealPosition = vectorToIdealPosition.magnitude;
 
-		if(distanceToIdealPosition == 0) {
+		if(panningToNewTarget && distanceToIdealPosition < .001f) {
+			Debug.Log("arrived at target, need to add callback");
 			panningToNewTarget = false;
 		}
 		else {
@@ -213,12 +222,14 @@ public class CameraController2D : MonoBehaviour {
 				}
 			}
 		
-//			Debug.DrawLine(transform.position, idealPosition, Color.blue);
-//			Debug.Log("vertical pushback: " + verticalPushBack);
 			var targetVector = (idealPosition + (verticalVector * -verticalPushBack * verticalFacing) + (horizontalVector * -horizontalPushBack * horizontalFacing)) - transform.position;
 			var moveSpeed = maxMoveSpeedPerSecond;
 			if(panningToNewTarget) moveSpeed = panningToNewTargetSpeed;
-			transform.Translate(targetVector.normalized * Mathf.Min(targetVector.magnitude, moveSpeed * Time.deltaTime), Space.World);
+
+			var targetMagnitude = targetVector.magnitude;
+			var moveDistance = Mathf.Min(targetMagnitude, moveSpeed * Time.deltaTime);
+			if(targetMagnitude < softArrivalDistance) moveDistance *= Mathf.Max(targetMagnitude / softArrivalDistance, .05f * moveSpeed);
+			transform.Translate(targetVector.normalized * moveDistance, Space.World);
 		}
 	}
 
@@ -228,9 +239,27 @@ public class CameraController2D : MonoBehaviour {
 
 	void CalculateScreenBounds() {
 		System.Func<Vector3, Vector3, OffsetData> AddRaycastOffsetPoint = (viewSpaceOrigin, viewSpacePoint) => {
-			var origin = camera.ViewportToWorldPoint(viewSpaceOrigin);
-			var vectorToOffset = camera.ViewportToWorldPoint(viewSpacePoint) - origin;
-			return new OffsetData { StartPointRelativeToCamera = origin - transform.position, Vector = vectorToOffset, NormalizedVector = vectorToOffset.normalized, DistanceFromStartPoint = vectorToOffset.magnitude };
+			if(camera.isOrthoGraphic) {
+				var origin = camera.ViewportToWorldPoint(viewSpaceOrigin);
+				var vectorToOffset = camera.ViewportToWorldPoint(viewSpacePoint) - origin;
+				return new OffsetData { StartPointRelativeToCamera = origin - transform.position, Vector = vectorToOffset, NormalizedVector = vectorToOffset.normalized, DistanceFromStartPoint = vectorToOffset.magnitude };
+			}
+			else {
+				var cameraPositionOnPlane = transform.position + (transform.forward * distance);
+
+				var originRay = camera.ViewportPointToRay(viewSpaceOrigin);
+				var theta = Vector3.Angle(transform.forward, originRay.direction);
+				var distanceToPlane = distance / Mathf.Cos(theta * Mathf.Deg2Rad);
+				var originPointOnPlane = originRay.origin + (originRay.direction * distanceToPlane);
+
+				var pointRay = camera.ViewportPointToRay(viewSpacePoint);
+				theta = Vector3.Angle(camera.transform.forward, pointRay.direction);
+				distanceToPlane = distance / Mathf.Cos(theta * Mathf.Deg2Rad);
+				var pointOnPlane = pointRay.origin + (pointRay.direction * distanceToPlane);
+				var vectorToOffset = pointOnPlane - originPointOnPlane;
+
+				return new OffsetData { StartPointRelativeToCamera = originPointOnPlane - cameraPositionOnPlane, Vector = vectorToOffset, NormalizedVector = vectorToOffset.normalized, DistanceFromStartPoint = vectorToOffset.magnitude };
+			}
 		};
 
 		leftRaycastPoint = AddRaycastOffsetPoint(new Vector3(0.5f, 0.5f), new Vector3(0, 0.5f));
