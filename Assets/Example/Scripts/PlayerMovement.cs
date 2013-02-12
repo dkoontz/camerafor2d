@@ -17,7 +17,7 @@ public class PlayerMovement : MonoBehaviour {
 //		if(Input.GetKeyDown(KeyCode.W)) {
 //			characterController.Move(Vector3.forward * 2);
 //		}
-		var movementVector = (Input.GetAxis(horizontalInput) * Vector3.right * moveSpeed * Time.deltaTime) + (Input.GetAxis(verticalInput) * Vector3.forward * moveSpeed * Time.deltaTime);
+		var movementVector = ((Input.GetAxis(horizontalInput) * Vector3.right) + (Input.GetAxis(verticalInput) * Vector3.forward)) * moveSpeed * Time.deltaTime;
 		characterController.Move(movementVector);
 	}
 }
