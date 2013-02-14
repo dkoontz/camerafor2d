@@ -2,7 +2,7 @@ using UnityEngine;
 using System.Collections;
 
 public class AddCameraTargetWhenTouched : MonoBehaviour {
-	public CameraController2D camera;
+	public CameraController2D cameraController;
 	public Transform target;
 	public float moveSpeed;
 	public bool removeTargetAfterDelay;
@@ -13,25 +13,30 @@ public class AddCameraTargetWhenTouched : MonoBehaviour {
 	public GameObject tweenTarget;
 	public string tweenName;
 	
+	void Start() {
+		if(cameraController == null) {
+			cameraController = Camera.main.GetComponent<CameraController2D>();
+		}
+	}
 
 	void OnTriggerEnter() {
 
 		if(removeTargetAfterDelay) {
-			camera.AddTarget(target, moveSpeed, delay, revertMoveSpeed);
+			cameraController.AddTarget(target, moveSpeed, delay, revertMoveSpeed);
 		}
 		else {
-			camera.AddTarget(target, moveSpeed);
+			cameraController.AddTarget(target, moveSpeed);
 		}
 
 		if(triggerTweenAtTarget) {
 			Debug.Log("Adding callback");
-			camera.OnNewTargetReached += StartTween;
-			Debug.Log("callback null? " + (camera.OnNewTargetReached == null));
+			cameraController.OnNewTargetReached += StartTween;
+			Debug.Log("callback null? " + (cameraController.OnNewTargetReached == null));
 		}
 	}
 
 	void StartTween() {
 		iTweenEvent.GetEvent(tweenTarget, tweenName).Play();
-		camera.OnNewTargetReached -= StartTween;
+		cameraController.OnNewTargetReached -= StartTween;
 	}
 }

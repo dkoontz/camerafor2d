@@ -5,6 +5,7 @@ using System.Linq;
 using GoodStuff.NaturalLanguage;
 
 public class CameraController2D : MonoBehaviour {
+#region Internal Classes
 	public enum MovementAxis {
 //		XY,
 		XZ,
@@ -17,14 +18,16 @@ public class CameraController2D : MonoBehaviour {
 		public Vector3 NormalizedVector { get; set; }
 		public float DistanceFromStartPoint { get; set; }
 	}
+#endregion
 
 	public Vector3 CameraSeekPosition { 
 		get { return CameraSeekTarget.position; }
 		set { 
-			if(!exclusiveModeEnabled) throw new System.InvalidOperationException("Cannot set an explicit camera seek target unless the camera is in exclusive mode");
+			if(!ExclusiveModeEnabled) throw new System.InvalidOperationException("Cannot set an explicit camera seek target unless the camera is in exclusive mode");
 			CameraSeekTarget.position = value;
 		}
 	}
+	public bool ExclusiveModeEnabled { get; set; }
 
 	public MovementAxis axis = MovementAxis.XZ;
 	public LayerMask cameraBumperLayers;
@@ -36,6 +39,12 @@ public class CameraController2D : MonoBehaviour {
 
 	// Called after the initial transition to a target set via AddTarget or SetTarget
 	public System.Action OnNewTargetReached = null;
+
+	// Called after a new target has been set via AddTarget
+	public System.Action OnTargetAdded = null;
+
+	// Called after a target has been switched via SetTarget
+	public System.Action OnTargetSwitched = null;
 
 	public bool drawDebugLines;
 
@@ -67,7 +76,6 @@ public class CameraController2D : MonoBehaviour {
 	OffsetData rightDownRaycastPoint;
 	
 	Vector3 velocity;
-	bool exclusiveModeEnabled;
 	Stack<IEnumerable<Transform>> targetStack = new Stack<IEnumerable<Transform>>();
 	List<Vector3> influences = new List<Vector3>(5);
 	bool panningToNewTarget;
@@ -80,6 +88,26 @@ public class CameraController2D : MonoBehaviour {
 	Vector3 lastCalculatedPushBack;
 	Vector3[] influencesForGizmoRendering = new Vector3[0];
 #endif
+
+	public void SetTarget(Transform target) {
+		SetTarget(new [] { target });
+	}
+
+	public void SetTarget(Transform target, float moveSpeed) {
+		SetTarget(new [] { target }, moveSpeed);
+	}
+
+	public void SetTarget(IEnumerable<Transform> targets) {
+		SetTarget(targets, maxMoveSpeedPerSecond);
+	}
+
+	public void SetTarget(IEnumerable<Transform> targets, float moveSpeed) {
+		RemoveCurrentTarget();
+		targetStack.Push(targets);
+		panningToNewTarget = true;
+		panningToNewTargetSpeed = moveSpeed;
+		if(OnTargetSwitched != null) OnTargetSwitched();
+	}
 
 	public void AddTarget(Transform target) {
 		AddTarget(new [] { target });
@@ -94,15 +122,14 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	public void AddTarget(IEnumerable<Transform> targets) {
-		targetStack.Push(targets);
-		panningToNewTarget = true;
-		panningToNewTargetSpeed = maxMoveSpeedPerSecond;
+		AddTarget(targets, maxMoveSpeedPerSecond);
 	}
-
+	
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed) {
 		targetStack.Push(targets);
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
+		if(OnTargetAdded != null) OnTargetAdded();
 	}
 
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed, float revertAfterDuration, float revertMoveSpeed) {
@@ -110,6 +137,7 @@ public class CameraController2D : MonoBehaviour {
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
 		StartCoroutine(RemoveTargetAfterDelay(revertAfterDuration, revertMoveSpeed));
+		if(OnTargetAdded != null) OnTargetAdded();
 	}
 
 	public void RemoveCurrentTarget() {
@@ -118,13 +146,13 @@ public class CameraController2D : MonoBehaviour {
 		panningToNewTargetSpeed = maxMoveSpeedPerSecond;
 	}
 
-	public void JumpToIdealPosition() {
-		if(!exclusiveModeEnabled) throw new System.InvalidOperationException("Cannot set an explicit camera position unless the camera is in exclusive mode");
-		transform.position = IdealCameraPosition();
-	}
-
 	public void AddInfluence(Vector3 influence) {
 		influences.Add(influence);
+	}
+
+	public void JumpToIdealPosition() {
+		if(!ExclusiveModeEnabled) throw new System.InvalidOperationException("Cannot set an explicit camera position unless the camera is in exclusive mode");
+		transform.position = IdealCameraPosition();
 	}
 
 	public void Start() {
@@ -163,27 +191,22 @@ public class CameraController2D : MonoBehaviour {
 			return (GetHorizontalComponent(Vector3.one) * (minHorizontal + horizontalOffset)) + (GetVerticalComponent(Vector3.one) * (minVertical + verticalOffset)) - HeightOffset();
 		};
 
-		exclusiveModeEnabled = true;
+		ExclusiveModeEnabled = true;
 		JumpToIdealPosition();
-		exclusiveModeEnabled = false;
+		ExclusiveModeEnabled = false;
 		arrivalNotificationDistanceSquared = arrivalNotificationDistance * arrivalNotificationDistance;
 	}
 	
 	public void LateUpdate() {
-		lastCalculatedInfluence = TotalInfluence();
-		if(!exclusiveModeEnabled) CameraSeekTarget.position = IdealCameraPosition() + lastCalculatedInfluence;
+		if(!ExclusiveModeEnabled) CameraSeekTarget.position = IdealCameraPosition() + TotalInfluence();
 
 		var idealPosition = CameraSeekPosition;
-		var vectorToIdealPosition = (idealPosition - transform.position);
-//		var distanceToIdealPosition = vectorToIdealPosition.magnitude;
 
 		if((idealPosition - transform.position).sqrMagnitude > CAMERA_ARRIVAL_DISTANCE_SQUARED) {
 			var targetPosition = idealPosition + CalculatePushBackOffset(idealPosition);
 			var maxSpeed = maxMoveSpeedPerSecond;
 			if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
 			
-			var targetVector = targetPosition - transform.position;
-			var targetMagnitude = targetVector.magnitude;
 			
 			var interpolatedPosition = Vector3.zero;
 			interpolatedPosition.x = Mathf.SmoothDamp(transform.position.x, targetPosition.x, ref velocity.x, damping, maxSpeed);
@@ -196,18 +219,19 @@ public class CameraController2D : MonoBehaviour {
 			if(drawDebugLines) {
 				lastCalculatedPosition = interpolatedPosition;
 				lastCalculatedPushBack = CalculatePushBackOffset(idealPosition);
+				lastCalculatedInfluence = TotalInfluence();
 				influencesForGizmoRendering = new Vector3[influences.Count];
 				influences.CopyTo(influencesForGizmoRendering);
 			}
 #endif
-			influences.Clear();
 
-			if(panningToNewTarget && targetVector.sqrMagnitude <= arrivalNotificationDistanceSquared) {
-				Debug.Log("in update, at target, callback null? " + (OnNewTargetReached == null));
+			if(panningToNewTarget && (targetPosition - transform.position).sqrMagnitude <= arrivalNotificationDistanceSquared) {
 				if(OnNewTargetReached != null) OnNewTargetReached();
 				panningToNewTarget = false;
 			}
 		}
+
+		influences.Clear();
 	}
 
 	void CalculateScreenBounds() {
@@ -363,7 +387,7 @@ public class CameraController2D : MonoBehaviour {
 
 	void OnDrawGizmos() {
 		if(Application.isPlaying && drawDebugLines) {
-			if(!exclusiveModeEnabled) {
+			if(!ExclusiveModeEnabled) {
 				Gizmos.color = Color.magenta;
 				influencesForGizmoRendering.Each(influence => Gizmos.DrawLine(lastCalculatedPosition, lastCalculatedPosition + lastCalculatedInfluence));
 			}

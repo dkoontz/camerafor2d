@@ -1,9 +1,10 @@
 using UnityEngine;
 using System.Collections;
 
-public class AdjustCameraMoveSpeedWhenTouched : MonoBehaviour {
+public class SwitchTargetWhenTouched : MonoBehaviour {
 	public CameraController2D cameraController;
-	public float cameraMoveSpeed;
+	public Transform targetToSwitchTo;
+	public float moveSpeed;
 
 	void Start() {
 		if(cameraController == null) {
@@ -12,6 +13,6 @@ public class AdjustCameraMoveSpeedWhenTouched : MonoBehaviour {
 	}
 
 	void OnTriggerEnter() {
-		cameraController.maxMoveSpeedPerSecond = cameraMoveSpeed;
+		cameraController.SetTarget(targetToSwitchTo, moveSpeed);
 	}
 }

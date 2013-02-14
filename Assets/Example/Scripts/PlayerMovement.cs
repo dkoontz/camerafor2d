@@ -6,19 +6,22 @@ public class PlayerMovement : MonoBehaviour {
 	public string horizontalInput = "Horizontal";
 	public string verticalInput = "Vertical";
 	public float moveSpeed;
-	public CameraController2D camera;
+	public CameraController2D cameraController;
 	public float lookaheadScale = 0;
 
 	CharacterController characterController;
 
 	void Start() {
+		if(cameraController == null) {
+			cameraController = Camera.main.GetComponent<CameraController2D>();
+		}
 		characterController = GetComponent<CharacterController>();
 	}
 
 	void Update() {
-//		Debug.Log("horizontal: " + Input.GetAxis(horizontalInput) + ", vertical: " + Input.GetAxis(verticalInput));
-		var movementVector = ((Input.GetAxis(horizontalInput) * Vector3.right) + (Input.GetAxis(verticalInput) * Vector3.forward)) * moveSpeed * Time.deltaTime;
+		var inputVector = (Input.GetAxis(horizontalInput) * Vector3.right) + (Input.GetAxis(verticalInput) * Vector3.forward);
+		var movementVector = inputVector * moveSpeed * Time.deltaTime;
 		characterController.Move(movementVector);
-		camera.AddInfluence(movementVector.normalized * lookaheadScale);
+		cameraController.AddInfluence(inputVector * lookaheadScale);
 	}
 }

@@ -4,7 +4,7 @@ using GoodStuff.NaturalLanguage;
 
 public class FocusPointOfInterest : MonoBehaviour {
 	
-	public CameraController2D camera;
+	public CameraController2D cameraController;
 	public GameObject target;
 	public float focusDistance;
 	public float exclusiveFocusPercentage = .25f;
@@ -13,7 +13,10 @@ public class FocusPointOfInterest : MonoBehaviour {
 	Vector3 influencePoint;
 
 	void Start() {
-		focusDistanceSquared = Mathf.Pow(focusDistance, 2);
+		if(cameraController == null) {
+			cameraController = Camera.main.GetComponent<CameraController2D>();
+		}
+		focusDistanceSquared = focusDistance * focusDistance;
 	}
 
 	void Update() {
@@ -22,7 +25,7 @@ public class FocusPointOfInterest : MonoBehaviour {
 
 		if(distanceSquared < focusDistanceSquared) {
 			var percentOfDistance = (vectorToTarget.magnitude / focusDistance).MapToRange(exclusiveFocusPercentage, 1, 0, 1, true);
-			camera.AddInfluence(-vectorToTarget * (1 - percentOfDistance));
+			cameraController.AddInfluence(-vectorToTarget * (1 - percentOfDistance));
 		}
 	}
 
