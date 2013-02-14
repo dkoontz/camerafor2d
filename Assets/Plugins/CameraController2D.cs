@@ -32,6 +32,10 @@ public class CameraController2D : MonoBehaviour {
 	public float maxMoveSpeedPerSecond = 10;
 	public Transform initialTarget;
 	public float damping = .5f;
+	public float arrivalNotificationDistance = .01f;
+
+	// Called after the initial transition to a target set via AddTarget or SetTarget
+	public System.Action OnNewTargetReached = null;
 
 	public bool drawDebugLines;
 
@@ -39,6 +43,7 @@ public class CameraController2D : MonoBehaviour {
 	const float CAMERA_ARRIVAL_DISTANCE_SQUARED = CAMERA_ARRIVAL_DISTANCE * CAMERA_ARRIVAL_DISTANCE;
 
 	Transform CameraSeekTarget { get; set; }
+	IEnumerable<Transform> CurrentTarget { get { return targetStack.Peek(); } }
 
 	System.Func<Vector3> IdealCameraPosition;
 	System.Func<Vector3> HeightOffset;
@@ -67,7 +72,14 @@ public class CameraController2D : MonoBehaviour {
 	List<Vector3> influences = new List<Vector3>(5);
 	bool panningToNewTarget;
 	float panningToNewTargetSpeed;
-	Vector3 currentMovementVector;
+	float arrivalNotificationDistanceSquared;
+
+#if UNITY_EDITOR
+	Vector3 lastCalculatedPosition;
+	Vector3 lastCalculatedInfluence;
+	Vector3 lastCalculatedPushBack;
+	Vector3[] influencesForGizmoRendering = new Vector3[0];
+#endif
 
 	public void AddTarget(Transform target) {
 		AddTarget(new [] { target });
@@ -116,7 +128,6 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	public void Start() {
-
 		switch(axis) {
 //		case MovementAxis.XY:
 //			HeightOffset = () => Vector3.forward * distance;
@@ -152,52 +163,50 @@ public class CameraController2D : MonoBehaviour {
 			return (GetHorizontalComponent(Vector3.one) * (minHorizontal + horizontalOffset)) + (GetVerticalComponent(Vector3.one) * (minVertical + verticalOffset)) - HeightOffset();
 		};
 
-//		softArrivalMinimumMovement = softArrivalDistance * .20f;
 		exclusiveModeEnabled = true;
 		JumpToIdealPosition();
 		exclusiveModeEnabled = false;
+		arrivalNotificationDistanceSquared = arrivalNotificationDistance * arrivalNotificationDistance;
 	}
 	
 	public void LateUpdate() {
-		if(Input.GetKeyDown(KeyCode.Alpha1)) {
-			targetStack.Peek().First().Translate(-Vector3.right * 2);
-		}
-		if(Input.GetKeyDown(KeyCode.Alpha2)) {
-			targetStack.Peek().First().Translate(Vector3.right * 2);
-		}
-		if(Input.GetKey(KeyCode.Alpha3)) {
-			targetStack.Peek().First().Translate(-Vector3.right * 50 * Time.deltaTime);
-		}
-		if(Input.GetKey(KeyCode.Alpha4)) {
-			targetStack.Peek().First().Translate(Vector3.right * 50 * Time.deltaTime);
-		}
-
-		if(!exclusiveModeEnabled) CameraSeekTarget.position = IdealCameraPosition() + TotalInfluence();
+		lastCalculatedInfluence = TotalInfluence();
+		if(!exclusiveModeEnabled) CameraSeekTarget.position = IdealCameraPosition() + lastCalculatedInfluence;
 
 		var idealPosition = CameraSeekPosition;
 		var vectorToIdealPosition = (idealPosition - transform.position);
-		var distanceToIdealPosition = vectorToIdealPosition.magnitude;
+//		var distanceToIdealPosition = vectorToIdealPosition.magnitude;
 
-		if(panningToNewTarget && distanceToIdealPosition < CAMERA_ARRIVAL_DISTANCE) {
-			Debug.Log("arrived at target, need to add callback");
-			panningToNewTarget = false;
-		}
-		else {
+		if((idealPosition - transform.position).sqrMagnitude > CAMERA_ARRIVAL_DISTANCE_SQUARED) {
 			var targetPosition = idealPosition + CalculatePushBackOffset(idealPosition);
-			var targetVector = targetPosition - transform.position;
 			var maxSpeed = maxMoveSpeedPerSecond;
 			if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
-
+			
+			var targetVector = targetPosition - transform.position;
 			var targetMagnitude = targetVector.magnitude;
-
+			
 			var interpolatedPosition = Vector3.zero;
 			interpolatedPosition.x = Mathf.SmoothDamp(transform.position.x, targetPosition.x, ref velocity.x, damping, maxSpeed);
 			interpolatedPosition.y = Mathf.SmoothDamp(transform.position.y, targetPosition.y, ref velocity.y, damping, maxSpeed);
 			interpolatedPosition.z = Mathf.SmoothDamp(transform.position.z, targetPosition.z, ref velocity.z, damping, maxSpeed);
-
+			
 			transform.position = interpolatedPosition;
-
+			
+#if UNITY_EDITOR
+			if(drawDebugLines) {
+				lastCalculatedPosition = interpolatedPosition;
+				lastCalculatedPushBack = CalculatePushBackOffset(idealPosition);
+				influencesForGizmoRendering = new Vector3[influences.Count];
+				influences.CopyTo(influencesForGizmoRendering);
+			}
+#endif
 			influences.Clear();
+
+			if(panningToNewTarget && targetVector.sqrMagnitude <= arrivalNotificationDistanceSquared) {
+				Debug.Log("in update, at target, callback null? " + (OnNewTargetReached == null));
+				if(OnNewTargetReached != null) OnNewTargetReached();
+				panningToNewTarget = false;
+			}
 		}
 	}
 
@@ -254,69 +263,69 @@ public class CameraController2D : MonoBehaviour {
 		var upVerticalPushBack = 0f;
 		var downVerticalPushBack = 0f;
 
-		rightHorizontalPushBack = CalculatePushback (rightRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalPositive);
+		rightHorizontalPushBack = CalculatePushback(rightRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalPositive);
 		if (rightHorizontalPushBack > horizontalPushBack) {
 			horizontalPushBack = rightHorizontalPushBack;
 			horizontalFacing = 1;
 		}
 		if (0 == rightHorizontalPushBack) {
-			upVerticalPushBack = CalculatePushback (rightUpRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalPositive);
+			upVerticalPushBack = CalculatePushback(rightUpRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalPositive);
 			if (upVerticalPushBack > verticalPushBack) {
 				verticalPushBack = upVerticalPushBack;
 				verticalFacing = 1;
 			}
-			downVerticalPushBack = CalculatePushback (rightDownRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalNegative);
+			downVerticalPushBack = CalculatePushback(rightDownRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalNegative);
 			if (downVerticalPushBack > verticalPushBack) {
 				verticalPushBack = downVerticalPushBack;
 				verticalFacing = -1;
 			}
 		}
-		leftHorizontalPushBack = CalculatePushback (leftRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalNegative);
+		leftHorizontalPushBack = CalculatePushback(leftRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalNegative);
 		if (leftHorizontalPushBack > horizontalPushBack) {
 			horizontalPushBack = leftHorizontalPushBack;
 			horizontalFacing = -1;
 		}
 		if (0 == leftHorizontalPushBack) {
-			upVerticalPushBack = CalculatePushback (leftUpRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalPositive);
+			upVerticalPushBack = CalculatePushback(leftUpRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalPositive);
 			if (upVerticalPushBack > verticalPushBack) {
 				verticalPushBack = upVerticalPushBack;
 				verticalFacing = 1;
 			}
-			downVerticalPushBack = CalculatePushback (leftDownRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalNegative);
+			downVerticalPushBack = CalculatePushback(leftDownRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalNegative);
 			if (downVerticalPushBack > verticalPushBack) {
 				verticalPushBack = downVerticalPushBack;
 				verticalFacing = -1;
 			}
 		}
-		upVerticalPushBack = CalculatePushback (upRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalPositive);
+		upVerticalPushBack = CalculatePushback(upRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalPositive);
 		if (upVerticalPushBack > verticalPushBack) {
 			verticalPushBack = upVerticalPushBack;
 			verticalFacing = 1;
 		}
 		if (0 == upVerticalPushBack) {
-			rightHorizontalPushBack = CalculatePushback (upperRightRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalPositive);
+			rightHorizontalPushBack = CalculatePushback(upperRightRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalPositive);
 			if (rightHorizontalPushBack > horizontalPushBack) {
 				horizontalPushBack = rightHorizontalPushBack;
 				horizontalFacing = 1;
 			}
-			leftHorizontalPushBack = CalculatePushback (upperLeftRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalNegative);
+			leftHorizontalPushBack = CalculatePushback(upperLeftRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalNegative);
 			if (leftHorizontalPushBack > horizontalPushBack) {
 				horizontalPushBack = leftHorizontalPushBack;
 				horizontalFacing = -1;
 			}
 		}
-		downVerticalPushBack = CalculatePushback (downRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalNegative);
+		downVerticalPushBack = CalculatePushback(downRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.VerticalNegative);
 		if (downVerticalPushBack > verticalPushBack) {
 			verticalPushBack = downVerticalPushBack;
 			verticalFacing = -1;
 		}
 		if (0 == downVerticalPushBack) {
-			rightHorizontalPushBack = CalculatePushback (lowerRightRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalPositive);
+			rightHorizontalPushBack = CalculatePushback(lowerRightRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalPositive);
 			if (rightHorizontalPushBack > horizontalPushBack) {
 				horizontalPushBack = rightHorizontalPushBack;
 				horizontalFacing = 1;
 			}
-			leftHorizontalPushBack = CalculatePushback (lowerLeftRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalNegative);
+			leftHorizontalPushBack = CalculatePushback(lowerLeftRaycastPoint, idealCenterPointAtPlayerHeight, CameraBumper.BumperDirection.HorizontalNegative);
 			if (leftHorizontalPushBack > horizontalPushBack) {
 				horizontalPushBack = leftHorizontalPushBack;
 				horizontalFacing = -1;
@@ -349,24 +358,18 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	Vector3 TotalInfluence() {
-//		Debug.Log(influences.Aggregate(Vector3.zero, (offset, influence) => offset + influence));
 		return influences.Aggregate(Vector3.zero, (offset, influence) => offset + influence);
 	}
 
 	void OnDrawGizmos() {
 		if(Application.isPlaying && drawDebugLines) {
-			var idealPosition = IdealCameraPosition();
-
 			if(!exclusiveModeEnabled) {
 				Gizmos.color = Color.magenta;
-				influences.Each(influence => Gizmos.DrawLine(idealPosition, idealPosition + influence));
+				influencesForGizmoRendering.Each(influence => Gizmos.DrawLine(lastCalculatedPosition, lastCalculatedPosition + lastCalculatedInfluence));
 			}
 
 			Gizmos.color = Color.cyan;
-			Gizmos.DrawWireSphere(idealPosition + TotalInfluence(), .1f);
-
-			Gizmos.color = Color.red;
-			Gizmos.DrawLine(transform.position, transform.position + currentMovementVector);
+			Gizmos.DrawWireSphere(lastCalculatedPosition + lastCalculatedInfluence + lastCalculatedPushBack, .1f);
 		}
 	}
 }
