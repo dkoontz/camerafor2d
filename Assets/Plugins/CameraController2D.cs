@@ -5,7 +5,7 @@ using System.Linq;
 using GoodStuff.NaturalLanguage;
 
 public class CameraController2D : MonoBehaviour {
-#region Internal Classes
+#region Internal Types
 	public enum MovementAxis {
 //		XY,
 		XZ,
@@ -27,11 +27,27 @@ public class CameraController2D : MonoBehaviour {
 			CameraSeekTarget.position = value;
 		}
 	}
+	
+	public float DistanceMultiplier {
+		get { return distanceMultiplier; }
+		set { 
+			distanceMultiplier = value;
+			if(camera.isOrthoGraphic) camera.orthographicSize = originalZoom * distanceMultiplier;
+			else heightFromTarget = originalZoom * distanceMultiplier;
+			CalculateScreenBounds();
+		}
+	}
+
+	public IEnumerable<Transform> CurrentTarget { 
+		get { return targetStack.Peek(); } 
+		set { SetTarget(value); }
+	}
+
 	public bool ExclusiveModeEnabled { get; set; }
 
 	public MovementAxis axis = MovementAxis.XZ;
 	public LayerMask cameraBumperLayers;
-	public float distance;
+	public float heightFromTarget;
 	public float maxMoveSpeedPerSecond = 10;
 	public Transform initialTarget;
 	public float damping = .5f;
@@ -52,14 +68,14 @@ public class CameraController2D : MonoBehaviour {
 	const float CAMERA_ARRIVAL_DISTANCE_SQUARED = CAMERA_ARRIVAL_DISTANCE * CAMERA_ARRIVAL_DISTANCE;
 
 	Transform CameraSeekTarget { get; set; }
-	IEnumerable<Transform> CurrentTarget { get { return targetStack.Peek(); } }
-
-	System.Func<Vector3> IdealCameraPosition;
+	
 	System.Func<Vector3> HeightOffset;
 	System.Func<Vector3, Vector3> GetHorizontalComponent;
 	System.Func<Vector3, Vector3> GetVerticalComponent;
+	System.Func<Vector3, Vector3> GetDepthComponent;
 	System.Func<Vector3, float> GetHorizontalValue;
 	System.Func<Vector3, float> GetVerticalValue;
+	System.Func<Vector3, float> GetDepthValue;
 	
 	OffsetData leftRaycastPoint;
 	OffsetData upperLeftRaycastPoint;
@@ -75,15 +91,18 @@ public class CameraController2D : MonoBehaviour {
 	OffsetData leftDownRaycastPoint;
 	OffsetData rightDownRaycastPoint;
 	
+	Stack<IEnumerableThatIgnoresNull<Transform>> targetStack = new Stack<IEnumerableThatIgnoresNull<Transform>>();
 	Vector3 velocity;
-	Stack<IEnumerable<Transform>> targetStack = new Stack<IEnumerable<Transform>>();
 	List<Vector3> influences = new List<Vector3>(5);
 	bool panningToNewTarget;
 	float panningToNewTargetSpeed;
 	float arrivalNotificationDistanceSquared;
+	float distanceMultiplier = 1;
+	float originalZoom;
 
 #if UNITY_EDITOR
 	Vector3 lastCalculatedPosition;
+	Vector3 lastCalculatedIdealPosition;
 	Vector3 lastCalculatedInfluence;
 	Vector3 lastCalculatedPushBack;
 	Vector3[] influencesForGizmoRendering = new Vector3[0];
@@ -102,8 +121,9 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	public void SetTarget(IEnumerable<Transform> targets, float moveSpeed) {
+		if(0 == moveSpeed) moveSpeed = maxMoveSpeedPerSecond;
 		RemoveCurrentTarget();
-		targetStack.Push(targets);
+		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
 		if(OnTargetSwitched != null) OnTargetSwitched();
@@ -126,14 +146,16 @@ public class CameraController2D : MonoBehaviour {
 	}
 	
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed) {
-		targetStack.Push(targets);
+		if(0 == moveSpeed) moveSpeed = maxMoveSpeedPerSecond;
+		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
 		if(OnTargetAdded != null) OnTargetAdded();
 	}
 
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed, float revertAfterDuration, float revertMoveSpeed) {
-		targetStack.Push(targets);
+		if(0 == moveSpeed) moveSpeed = maxMoveSpeedPerSecond;
+		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
 		StartCoroutine(RemoveTargetAfterDelay(revertAfterDuration, revertMoveSpeed));
@@ -159,37 +181,27 @@ public class CameraController2D : MonoBehaviour {
 		switch(axis) {
 //		case MovementAxis.XY:
 //			HeightOffset = () => Vector3.forward * distance;
-//			IdealCameraPosition = () => target.position - HeightOffset();
 //			break;
 		case MovementAxis.XZ:
-			HeightOffset = () => -Vector3.up * distance;
+			HeightOffset = () => -Vector3.up * heightFromTarget;
 			GetHorizontalComponent = (vector) => new Vector3(vector.x, 0, 0);
 			GetHorizontalValue = (vector) => vector.x;
 			GetVerticalComponent = (vector) => new Vector3(0, 0, vector.z);
 			GetVerticalValue = (vector) => vector.z;
-
+			GetDepthComponent = (vector) => new Vector3(0, vector.y, 0);
+			GetDepthValue = (vector) => vector.y;
 			break;
 //		case MovementAxis.YZ:
 //			HeightOffset = () => Vector3.right * distance;
-//			IdealCameraPosition = () => target.position + HeightOffset();
 //			break;
 		}
 
 		CameraSeekTarget = new GameObject("_CameraTarget").transform;
 		AddTarget(initialTarget);
 
+		if(camera.isOrthoGraphic) originalZoom = camera.orthographicSize;
+		else originalZoom = heightFromTarget;
 		CalculateScreenBounds();
-		IdealCameraPosition = () => {
-			if(1 == targetStack.Peek ().Count()) return targetStack.Peek().First().position - HeightOffset();
-
-			var minHorizontal = targetStack.Peek().Min(t => GetHorizontalValue(t.position));
-			var maxHorizontal = targetStack.Peek().Max(t => GetHorizontalValue(t.position));
-			var horizontalOffset = (maxHorizontal - minHorizontal) * 0.5f;
-			var minVertical = targetStack.Peek().Min(t => GetVerticalValue(t.position));
-			var maxVertical = targetStack.Peek().Max(t => GetVerticalValue(t.position));
-			var verticalOffset = (maxVertical - minVertical) * 0.5f;
-			return (GetHorizontalComponent(Vector3.one) * (minHorizontal + horizontalOffset)) + (GetVerticalComponent(Vector3.one) * (minVertical + verticalOffset)) - HeightOffset();
-		};
 
 		ExclusiveModeEnabled = true;
 		JumpToIdealPosition();
@@ -207,7 +219,6 @@ public class CameraController2D : MonoBehaviour {
 			var maxSpeed = maxMoveSpeedPerSecond;
 			if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
 			
-			
 			var interpolatedPosition = Vector3.zero;
 			interpolatedPosition.x = Mathf.SmoothDamp(transform.position.x, targetPosition.x, ref velocity.x, damping, maxSpeed);
 			interpolatedPosition.y = Mathf.SmoothDamp(transform.position.y, targetPosition.y, ref velocity.y, damping, maxSpeed);
@@ -218,6 +229,7 @@ public class CameraController2D : MonoBehaviour {
 #if UNITY_EDITOR
 			if(drawDebugLines) {
 				lastCalculatedPosition = interpolatedPosition;
+				lastCalculatedIdealPosition = idealPosition;
 				lastCalculatedPushBack = CalculatePushBackOffset(idealPosition);
 				lastCalculatedInfluence = TotalInfluence();
 				influencesForGizmoRendering = new Vector3[influences.Count];
@@ -242,16 +254,16 @@ public class CameraController2D : MonoBehaviour {
 				return new OffsetData { StartPointRelativeToCamera = origin - transform.position, Vector = vectorToOffset, NormalizedVector = vectorToOffset.normalized, DistanceFromStartPoint = vectorToOffset.magnitude };
 			}
 			else {
-				var cameraPositionOnPlane = transform.position + (transform.forward * distance);
+				var cameraPositionOnPlane = transform.position + (transform.forward * heightFromTarget);
 
 				var originRay = camera.ViewportPointToRay(viewSpaceOrigin);
 				var theta = Vector3.Angle(transform.forward, originRay.direction);
-				var distanceToPlane = distance / Mathf.Cos(theta * Mathf.Deg2Rad);
+				var distanceToPlane = heightFromTarget / Mathf.Cos(theta * Mathf.Deg2Rad);
 				var originPointOnPlane = originRay.origin + (originRay.direction * distanceToPlane);
 
 				var pointRay = camera.ViewportPointToRay(viewSpacePoint);
 				theta = Vector3.Angle(camera.transform.forward, pointRay.direction);
-				distanceToPlane = distance / Mathf.Cos(theta * Mathf.Deg2Rad);
+				distanceToPlane = heightFromTarget / Mathf.Cos(theta * Mathf.Deg2Rad);
 				var pointOnPlane = pointRay.origin + (pointRay.direction * distanceToPlane);
 				var vectorToOffset = pointOnPlane - originPointOnPlane;
 
@@ -374,6 +386,23 @@ public class CameraController2D : MonoBehaviour {
 		return pushbackDueToCollision;
 	}
 
+	Vector3 TotalInfluence() {
+		return influences.Aggregate(Vector3.zero, (offset, influence) => offset + influence);
+	}
+
+	Vector3 IdealCameraPosition() {
+		var targets = targetStack.Peek();
+		if(1 == targets.Count()) return targets.First().position - HeightOffset();
+
+		var minHorizontal = targets.Min(t => GetHorizontalValue(t.position));
+		var maxHorizontal = targets.Max(t => GetHorizontalValue(t.position));
+		var horizontalOffset = (maxHorizontal - minHorizontal) * 0.5f;
+		var minVertical = targets.Min(t => GetVerticalValue(t.position));
+		var maxVertical = targets.Max(t => GetVerticalValue(t.position));
+		var verticalOffset = (maxVertical - minVertical) * 0.5f;
+		return (GetHorizontalComponent(Vector3.one) * (minHorizontal + horizontalOffset)) + (GetVerticalComponent(Vector3.one) * (minVertical + verticalOffset)) - HeightOffset();
+	}
+
 	IEnumerator RemoveTargetAfterDelay(float delay, float revertMoveSpeed) {
 		yield return new WaitForSeconds(delay);
 		panningToNewTarget = true;
@@ -381,19 +410,18 @@ public class CameraController2D : MonoBehaviour {
 		targetStack.Pop();
 	}
 
-	Vector3 TotalInfluence() {
-		return influences.Aggregate(Vector3.zero, (offset, influence) => offset + influence);
-	}
-
 	void OnDrawGizmos() {
 		if(Application.isPlaying && drawDebugLines) {
-			if(!ExclusiveModeEnabled) {
-				Gizmos.color = Color.magenta;
-				influencesForGizmoRendering.Each(influence => Gizmos.DrawLine(lastCalculatedPosition, lastCalculatedPosition + lastCalculatedInfluence));
-			}
+//			if(!ExclusiveModeEnabled) {
+//				Gizmos.color = Color.magenta;
+//				influencesForGizmoRendering.Each(influence => Gizmos.DrawLine(lastCalculatedPosition, lastCalculatedPosition + lastCalculatedInfluence));
+//			}
 
-			Gizmos.color = Color.cyan;
-			Gizmos.DrawWireSphere(lastCalculatedPosition + lastCalculatedInfluence + lastCalculatedPushBack, .1f);
+			Gizmos.color = new Color(1, .8f, 0);
+			Gizmos.DrawWireSphere(lastCalculatedIdealPosition, .1f);
+
+			Gizmos.color = Color.magenta;
+			Gizmos.DrawWireSphere(lastCalculatedPosition, .1f);
 		}
 	}
 }

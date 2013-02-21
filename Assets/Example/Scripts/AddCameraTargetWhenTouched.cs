@@ -3,7 +3,7 @@ using System.Collections;
 
 public class AddCameraTargetWhenTouched : MonoBehaviour {
 	public CameraController2D cameraController;
-	public Transform target;
+	public Transform[] targets;
 	public float moveSpeed;
 	public bool removeTargetAfterDelay;
 	public float delay = 5;
@@ -22,16 +22,14 @@ public class AddCameraTargetWhenTouched : MonoBehaviour {
 	void OnTriggerEnter() {
 
 		if(removeTargetAfterDelay) {
-			cameraController.AddTarget(target, moveSpeed, delay, revertMoveSpeed);
+			cameraController.AddTarget(targets, moveSpeed, delay, revertMoveSpeed);
 		}
 		else {
-			cameraController.AddTarget(target, moveSpeed);
+			cameraController.AddTarget(targets, moveSpeed);
 		}
 
 		if(triggerTweenAtTarget) {
-			Debug.Log("Adding callback");
 			cameraController.OnNewTargetReached += StartTween;
-			Debug.Log("callback null? " + (cameraController.OnNewTargetReached == null));
 		}
 	}
 
