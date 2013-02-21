@@ -44,6 +44,7 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	public bool ExclusiveModeEnabled { get; set; }
+	public bool MovingToNewTarget { get { return panningToNewTarget; } }
 
 	public MovementAxis axis = MovementAxis.XZ;
 	public LayerMask cameraBumperLayers;
@@ -410,6 +411,7 @@ public class CameraController2D : MonoBehaviour {
 		targetStack.Pop();
 	}
 
+#if UNITY_EDITOR
 	void OnDrawGizmos() {
 		if(Application.isPlaying && drawDebugLines) {
 //			if(!ExclusiveModeEnabled) {
@@ -424,4 +426,5 @@ public class CameraController2D : MonoBehaviour {
 			Gizmos.DrawWireSphere(lastCalculatedPosition, .1f);
 		}
 	}
+#endif
 }

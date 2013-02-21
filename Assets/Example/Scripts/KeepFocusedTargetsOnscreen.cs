@@ -22,6 +22,9 @@ public class KeepFocusedTargetsOnscreen : MonoBehaviour {
 	}
 
 	void Update() {
+		// Don't zoom out if we're panning to a new target such as when doing a reveal after hitting a switch
+		if(cameraController.MovingToNewTarget) return;
+
 		var targets = cameraController.CurrentTarget;
 		if(targets.Count() > viewportPoints.Count()) {
 			viewportPoints = new Vector2[targets.Count()];

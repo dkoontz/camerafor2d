@@ -13,7 +13,7 @@ public class ZoomCameraWhenTouched : MonoBehaviour {
 	}
 
 	void OnTriggerEnter() {
-		iTween.ValueTo(gameObject, iTween.Hash("from", 1, "to", 3, "time", 2, "onupdate", "UpdateCameraZoom", "oncomplete", "ZoomDown"));
+		iTween.ValueTo(gameObject, iTween.Hash("from", 1, "to", 3, "time", 1.5f, "onupdate", "UpdateCameraZoom", "oncomplete", "ZoomDown"));
 	}
 
 	public void UpdateCameraZoom(float value) {
@@ -21,6 +21,6 @@ public class ZoomCameraWhenTouched : MonoBehaviour {
 	}
 
 	public void ZoomDown() {
-		iTween.ValueTo(gameObject, iTween.Hash("from", 3, "to", 1, "time", 2, "onupdate", "UpdateCameraZoom"));
+		iTween.ValueTo(gameObject, iTween.Hash("from", 3, "to", 1, "time", 1.5f, "onupdate", "UpdateCameraZoom"));
 	}
 }
