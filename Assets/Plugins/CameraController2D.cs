@@ -20,6 +20,17 @@ public class CameraController2D : MonoBehaviour {
 	}
 #endregion
 
+	public IEnumerable<Transform> CurrentTarget { 
+		get { return targetStack.Peek(); } 
+		set { SetTarget(value); }
+	}
+
+	/// <summary>
+	/// The position that the camera is attempting to move to. This is normally the target's position
+	/// (or midpoint of the targets if there are multiple) plus the sum of all influences.  This is not
+	/// the final position the camera will move to, but the position it would move to if there are no
+	/// CameraBumpers to restrict movement and the camera has sufficient time to move.
+	/// </summary>
 	public Vector3 CameraSeekPosition { 
 		get { return CameraSeekTarget.position; }
 		set { 
@@ -27,31 +38,63 @@ public class CameraController2D : MonoBehaviour {
 			CameraSeekTarget.position = value;
 		}
 	}
-	
+
+	/// <summary>
+	/// Modifies the "distance" to the target.  For ortho this modifies the camera's ortho-size, for
+	/// perspective this modifies the actual height value.
+	/// *NOTE*: After changing the DistanceMultiplier the camera bounds will be inaccurate and camera 
+	/// bumpers will not work properly.  Please call CalculateScreenBounds before collision with a 
+	/// CameraBumper occurs.
+	/// </summary>
+	/// <value>1 = normal distance, less than one zooms in, more than one zooms out</value>
 	public float DistanceMultiplier {
 		get { return distanceMultiplier; }
 		set { 
 			distanceMultiplier = value;
 			if(camera.isOrthoGraphic) camera.orthographicSize = originalZoom * distanceMultiplier;
 			else heightFromTarget = originalZoom * distanceMultiplier;
-			CalculateScreenBounds();
 		}
 	}
 
-	public IEnumerable<Transform> CurrentTarget { 
-		get { return targetStack.Peek(); } 
-		set { SetTarget(value); }
-	}
-
+	/// <summary>
+	/// Exclusive mode allows you to position the camera's target manually.  You must enable exclusive mode before 
+	/// attempting to set a CameraSeekPosition.  While in exclusive mode, all influences are ignored.
+	/// </summary>
 	public bool ExclusiveModeEnabled { get; set; }
+
+	/// <summary>
+	/// Is the camera moving to a new position as the result of a SetTarget or AddTarget?
+	/// </summary>
 	public bool MovingToNewTarget { get { return panningToNewTarget; } }
 
 	public MovementAxis axis = MovementAxis.XZ;
 	public LayerMask cameraBumperLayers;
+
+	/// <summary>
+	/// Where to position the camera, along the "up" vector from the target.  The "up" vector is determined
+	/// based on the axis that is chosen.
+	/// </summary>
 	public float heightFromTarget;
+
+	/// <summary>
+	/// The maximum move speed allowed when moving towards the camera's target
+	/// </summary>
 	public float maxMoveSpeedPerSecond = 10;
+
+	/// <summary>
+	/// Eqivalent to calling AddTarget with this Transform
+	/// </summary>
 	public Transform initialTarget;
+
+	/// <summary>
+	/// Damping is a slowing or delay factor for the camera's movement.  Higher damping creates a "squishier"
+	/// feeling camera that lags behind when the target moves.  To get zero lag use a value of 0.015.
+	/// </summary>
 	public float damping = .5f;
+
+	/// <summary>
+	/// The distance from the target where OnNewTargetReached callbacks should be sent.
+	/// </summary>
 	public float arrivalNotificationDistance = .01f;
 
 	// Called after the initial transition to a target set via AddTarget or SetTarget
@@ -63,7 +106,14 @@ public class CameraController2D : MonoBehaviour {
 	// Called after a target has been switched via SetTarget
 	public System.Action OnTargetSwitched = null;
 
+
+#if UNITY_EDITOR
+	/// <summary>
+	///  Enable editor debug lines.  This increases the cost of many operations and will degrade the performance
+	/// of the camera slightly.
+	/// </summary>
 	public bool drawDebugLines;
+#endif
 
 	const float CAMERA_ARRIVAL_DISTANCE = .001f;
 	const float CAMERA_ARRIVAL_DISTANCE_SQUARED = CAMERA_ARRIVAL_DISTANCE * CAMERA_ARRIVAL_DISTANCE;
@@ -100,6 +150,7 @@ public class CameraController2D : MonoBehaviour {
 	float arrivalNotificationDistanceSquared;
 	float distanceMultiplier = 1;
 	float originalZoom;
+//	Vector3 totalInfluence;
 
 #if UNITY_EDITOR
 	Vector3 lastCalculatedPosition;
@@ -247,7 +298,12 @@ public class CameraController2D : MonoBehaviour {
 		influences.Clear();
 	}
 
-	void CalculateScreenBounds() {
+	/// <summary>
+	/// This calculates the points to be used when determining collision with CameraBumper objects.
+	/// Typically this only needs to be run once, but if the DistanceMultiplier is changed this
+	/// will need to be run before the next collision with a CameraBumper.
+	/// </summary>
+	public void CalculateScreenBounds() {
 		System.Func<Vector3, Vector3, OffsetData> AddRaycastOffsetPoint = (viewSpaceOrigin, viewSpacePoint) => {
 			if(camera.isOrthoGraphic) {
 				var origin = camera.ViewportToWorldPoint(viewSpaceOrigin);
@@ -379,10 +435,14 @@ public class CameraController2D : MonoBehaviour {
 			var bumper = hitInfo.collider.GetComponent<CameraBumper>();
 			if(null == bumper || (bumper != null && (bumper.blockDirection & validDirections) != CameraBumper.BumperDirection.None)) {
 				pushbackDueToCollision = offset.DistanceFromStartPoint - hitInfo.distance;
+#if UNITY_EDITOR
 				if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + (offset.NormalizedVector * hitInfo.distance), Color.red);
+#endif
 			}
 		}
+#if UNITY_EDITOR
 		else if(drawDebugLines) Debug.DrawLine(idealCenterPoint + offset.StartPointRelativeToCamera, idealCenterPoint + offset.StartPointRelativeToCamera + offset.Vector, Color.green);
+#endif
 
 		return pushbackDueToCollision;
 	}
@@ -393,7 +453,16 @@ public class CameraController2D : MonoBehaviour {
 
 	Vector3 IdealCameraPosition() {
 		var targets = targetStack.Peek();
-		if(1 == targets.Count()) return targets.First().position - HeightOffset();
+
+		// Hacks to avoid any memory allocation, .Count() and .First() both allocate
+		var count = 0;
+		Transform first = null;
+		foreach(var t in targets) {
+			if(0 == count) first = t;
+			++count;
+		}
+
+		if(1 == count) return first.position - HeightOffset();
 
 		var minHorizontal = targets.Min(t => GetHorizontalValue(t.position));
 		var maxHorizontal = targets.Max(t => GetHorizontalValue(t.position));

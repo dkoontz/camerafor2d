@@ -15,13 +15,15 @@ public class KeepFocusedTargetsOnscreen : MonoBehaviour {
 	// pre-allocate array so we aren't generating a lot of garbage each update
 	Vector2[] viewportPoints = new Vector2[10];
 
+	bool needToRecalculateScreenBounds;
+
 	void Start() {
 		if(cameraController == null) {
 			cameraController = Camera.main.GetComponent<CameraController2D>();
 		}
 	}
 
-	void Update() {
+	void LateUpdate() {
 		// Don't zoom out if we're panning to a new target such as when doing a reveal after hitting a switch
 		if(cameraController.MovingToNewTarget) return;
 
@@ -41,11 +43,13 @@ public class KeepFocusedTargetsOnscreen : MonoBehaviour {
 			// determine if any target is in the zoom out border
 			if(viewportPoints[i].x < zoomOutBorder || viewportPoints[i].x > farZoomOutBorder || viewportPoints[i].y < zoomOutBorder || viewportPoints[i].y > farZoomOutBorder) {
 				zoomOut = true;
+				needToRecalculateScreenBounds = true;
 			}
 
 			// determine if all targets are in the zoom in border
 			if(viewportPoints[i].x < zoomInBorder || viewportPoints[i].x > farZoomInBorder || viewportPoints[i].y < zoomInBorder || viewportPoints[i].y > farZoomInBorder) {
 				zoomIn = false;
+				needToRecalculateScreenBounds = true;
 			}
 
 			++i;
@@ -60,6 +64,9 @@ public class KeepFocusedTargetsOnscreen : MonoBehaviour {
 			var zoomAmount = multiplierChangeSpeed * Time.deltaTime;
 			if(cameraController.DistanceMultiplier - zoomAmount < 1) cameraController.DistanceMultiplier = 1;
 			else cameraController.DistanceMultiplier -= zoomAmount;
+		}
+		else {
+			if(needToRecalculateScreenBounds) cameraController.CalculateScreenBounds();
 		}
 	}
 }
