@@ -9,6 +9,8 @@ public class FocusPointOfInterest : MonoBehaviour {
 	public float focusDistance;
 	public float exclusiveFocusPercentage = .25f;
 
+	public bool drawDebugLines;
+
 	float focusDistanceSquared;
 	Vector3 influencePoint;
 
@@ -28,9 +30,11 @@ public class FocusPointOfInterest : MonoBehaviour {
 			cameraController.AddInfluence(-vectorToTarget * (1 - percentOfDistance));
 		}
 	}
-
+	
 	void OnDrawGizmos() {
-		Gizmos.color = Color.blue;
-		Gizmos.DrawWireSphere(transform.position, focusDistance);
+		if(drawDebugLines) {
+			Gizmos.color = Color.blue;
+			Gizmos.DrawWireSphere(transform.position, focusDistance);
+		}
 	}
 }

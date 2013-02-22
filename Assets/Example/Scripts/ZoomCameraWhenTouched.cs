@@ -6,6 +6,8 @@ public class ZoomCameraWhenTouched : MonoBehaviour {
 	public CameraController2D cameraController;
 	public float zoomAmount;
 
+	float disabledUntilTime;
+
 	void Start() {
 		if(cameraController == null) {
 			cameraController = Camera.main.GetComponent<CameraController2D>();
@@ -13,7 +15,10 @@ public class ZoomCameraWhenTouched : MonoBehaviour {
 	}
 
 	void OnTriggerEnter() {
-		iTween.ValueTo(gameObject, iTween.Hash("from", 1, "to", 3, "time", 1.5f, "onupdate", "UpdateCameraZoom", "oncomplete", "ZoomDown"));
+		if(Time.time > disabledUntilTime) {
+			iTween.ValueTo(gameObject, iTween.Hash("from", 1, "to", 3, "time", 1.5f, "onupdate", "UpdateCameraZoom", "oncomplete", "ZoomDown"));
+			disabledUntilTime = Time.time + 3;
+		}
 	}
 
 	public void UpdateCameraZoom(float value) {
