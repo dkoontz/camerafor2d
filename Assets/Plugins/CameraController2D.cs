@@ -123,10 +123,8 @@ public class CameraController2D : MonoBehaviour {
 	System.Func<Vector3> HeightOffset;
 	System.Func<Vector3, Vector3> GetHorizontalComponent;
 	System.Func<Vector3, Vector3> GetVerticalComponent;
-	System.Func<Vector3, Vector3> GetDepthComponent;
 	System.Func<Vector3, float> GetHorizontalValue;
 	System.Func<Vector3, float> GetVerticalValue;
-	System.Func<Vector3, float> GetDepthValue;
 	
 	OffsetData leftRaycastPoint;
 	OffsetData upperLeftRaycastPoint;
@@ -153,10 +151,10 @@ public class CameraController2D : MonoBehaviour {
 //	Vector3 totalInfluence;
 
 #if UNITY_EDITOR
+	readonly Color ORANGE_COLOR = new Color(1, .8f, 0);
 	Vector3 lastCalculatedPosition;
 	Vector3 lastCalculatedIdealPosition;
 	Vector3 lastCalculatedInfluence;
-	Vector3 lastCalculatedPushBack;
 	Vector3[] influencesForGizmoRendering = new Vector3[0];
 #endif
 
@@ -240,8 +238,6 @@ public class CameraController2D : MonoBehaviour {
 			GetHorizontalValue = (vector) => vector.x;
 			GetVerticalComponent = (vector) => new Vector3(0, 0, vector.z);
 			GetVerticalValue = (vector) => vector.z;
-			GetDepthComponent = (vector) => new Vector3(0, vector.y, 0);
-			GetDepthValue = (vector) => vector.y;
 			break;
 //		case MovementAxis.YZ:
 //			HeightOffset = () => Vector3.right * distance;
@@ -281,8 +277,7 @@ public class CameraController2D : MonoBehaviour {
 #if UNITY_EDITOR
 			if(drawDebugLines) {
 				lastCalculatedPosition = interpolatedPosition;
-				lastCalculatedIdealPosition = idealPosition;
-				lastCalculatedPushBack = CalculatePushBackOffset(idealPosition);
+				lastCalculatedIdealPosition = IdealCameraPosition();
 				lastCalculatedInfluence = TotalInfluence();
 				influencesForGizmoRendering = new Vector3[influences.Count];
 				influences.CopyTo(influencesForGizmoRendering);
@@ -483,12 +478,15 @@ public class CameraController2D : MonoBehaviour {
 #if UNITY_EDITOR
 	void OnDrawGizmos() {
 		if(Application.isPlaying && drawDebugLines) {
-//			if(!ExclusiveModeEnabled) {
-//				Gizmos.color = Color.magenta;
-//				influencesForGizmoRendering.Each(influence => Gizmos.DrawLine(lastCalculatedPosition, lastCalculatedPosition + lastCalculatedInfluence));
-//			}
+			if(!ExclusiveModeEnabled) {
+				Gizmos.color = Color.magenta;
+				Gizmos.DrawLine(lastCalculatedIdealPosition, lastCalculatedIdealPosition + lastCalculatedInfluence);
 
-			Gizmos.color = new Color(1, .8f, 0);
+				Gizmos.color = ORANGE_COLOR;
+				influencesForGizmoRendering.Each(influence => Gizmos.DrawLine(lastCalculatedIdealPosition, lastCalculatedIdealPosition + influence));
+			}
+
+			Gizmos.color = ORANGE_COLOR;
 			Gizmos.DrawWireSphere(lastCalculatedIdealPosition, .1f);
 
 			Gizmos.color = Color.magenta;
