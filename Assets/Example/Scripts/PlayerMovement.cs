@@ -7,7 +7,8 @@ public class PlayerMovement : MonoBehaviour {
 	public string verticalInput = "Vertical";
 	public float moveSpeed;
 	public CameraController2D cameraController;
-	public float lookaheadScale = 0;
+	public float lookahead;
+	public float lookaheadEaseTime;
 
 	// Very simple sprite system to show the player character
 	public Renderer spriteRenderer;
@@ -24,6 +25,8 @@ public class PlayerMovement : MonoBehaviour {
 	float cellWidth;
 	float cellHeight;
 	float changeToNextFrameAt;
+	Vector3 lookaheadChangeVelocity;
+	Vector3 currentLookahead;
 
 	void Start() {
 		if(cameraController == null) {
@@ -36,12 +39,16 @@ public class PlayerMovement : MonoBehaviour {
 	}
 
 	void Update() {
-		var inputVector = (Input.GetAxis(horizontalInput) * Vector3.right) + (Input.GetAxis(verticalInput) * Vector3.forward);
-		var movementVector = inputVector * moveSpeed * Time.deltaTime;
-		characterController.Move(movementVector);
-		cameraController.AddInfluence(inputVector * lookaheadScale);
+		var inputVector = ((Input.GetAxis(horizontalInput) * Vector3.right) + (Input.GetAxis(verticalInput) * Vector3.forward)).normalized;
+		characterController.Move(inputVector * moveSpeed * Time.deltaTime);
 
-		if(Time.time >= changeToNextFrameAt && inputVector.magnitude > 0) {
+		var targetLookahead = inputVector * lookahead;
+		currentLookahead.x = Mathf.SmoothDamp(currentLookahead.x, targetLookahead.x, ref lookaheadChangeVelocity.x, lookaheadEaseTime);
+		currentLookahead.y = Mathf.SmoothDamp(currentLookahead.y, targetLookahead.y, ref lookaheadChangeVelocity.y, lookaheadEaseTime);
+		currentLookahead.z = Mathf.SmoothDamp(currentLookahead.z, targetLookahead.z, ref lookaheadChangeVelocity.z, lookaheadEaseTime);
+		cameraController.AddInfluence(currentLookahead);
+
+		if(Time.time >= changeToNextFrameAt && inputVector.sqrMagnitude > 0) {
 			changeToNextFrameAt = Time.time + animationFrameDelay;
 			currentAnimationFrameIndex++;
 		}
