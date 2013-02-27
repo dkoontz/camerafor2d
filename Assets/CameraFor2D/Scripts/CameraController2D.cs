@@ -148,7 +148,8 @@ public class CameraController2D : MonoBehaviour {
 	float arrivalNotificationDistanceSquared;
 	float distanceMultiplier = 1;
 	float originalZoom;
-//	Vector3 totalInfluence;
+	float revertAfterDuration;
+	float revertMoveSpeed;
 
 #if UNITY_EDITOR
 	readonly Color ORANGE_COLOR = new Color(1, .8f, 0);
@@ -208,7 +209,9 @@ public class CameraController2D : MonoBehaviour {
 		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
-		StartCoroutine(RemoveTargetAfterDelay(revertAfterDuration, revertMoveSpeed));
+		this.revertAfterDuration = revertAfterDuration;
+		this.revertMoveSpeed = revertMoveSpeed;
+		OnNewTargetReached += RevertAfterReachingTarget;
 		if(OnTargetAdded != null) OnTargetAdded();
 	}
 
@@ -466,6 +469,11 @@ public class CameraController2D : MonoBehaviour {
 		var maxVertical = targets.Max(t => GetVerticalValue(t.position));
 		var verticalOffset = (maxVertical - minVertical) * 0.5f;
 		return (GetHorizontalComponent(Vector3.one) * (minHorizontal + horizontalOffset)) + (GetVerticalComponent(Vector3.one) * (minVertical + verticalOffset)) - HeightOffset();
+	}
+
+	void RevertAfterReachingTarget() {
+		StartCoroutine(RemoveTargetAfterDelay(revertAfterDuration, revertMoveSpeed));
+		OnNewTargetReached -= RevertAfterReachingTarget;
 	}
 
 	IEnumerator RemoveTargetAfterDelay(float delay, float revertMoveSpeed) {

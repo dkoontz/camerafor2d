@@ -19,6 +19,7 @@ public class PlayerMovement : MonoBehaviour {
 	public Vector2[] downFrames;
 	public Vector2[] leftFrames;
 	public Vector2[] rightFrames;
+	public bool flipLeftSide;
 
 	CharacterController characterController;
 	int currentAnimationFrameIndex;
@@ -27,6 +28,7 @@ public class PlayerMovement : MonoBehaviour {
 	float changeToNextFrameAt;
 	Vector3 lookaheadChangeVelocity;
 	Vector3 currentLookahead;
+	bool flippedHorizontally;
 
 	void Start() {
 		if(cameraController == null) {
@@ -51,14 +53,23 @@ public class PlayerMovement : MonoBehaviour {
 		if(Time.time >= changeToNextFrameAt && inputVector.sqrMagnitude > 0) {
 			changeToNextFrameAt = Time.time + animationFrameDelay;
 			currentAnimationFrameIndex++;
+
+			var scale = spriteRenderer.material.mainTextureScale;
+			scale.x = Mathf.Abs(scale.x);
+			if(flippedHorizontally) scale.x *= -1;
+			spriteRenderer.material.mainTextureScale = scale;
 		}
+
+
 
 		// determine facing
 		if(inputVector.x > 0) {
 			spriteRenderer.material.mainTextureOffset = ConvertPositionToOffset(rightFrames[currentAnimationFrameIndex % rightFrames.Length]);
+			flippedHorizontally = false;
 		}
 		else if(inputVector.x < 0) {
 			spriteRenderer.material.mainTextureOffset = ConvertPositionToOffset(leftFrames[currentAnimationFrameIndex % leftFrames.Length]);
+			if(flipLeftSide) flippedHorizontally = true;
 		}
 		else if(inputVector.z > 0) {
 			spriteRenderer.material.mainTextureOffset = ConvertPositionToOffset(upFrames[currentAnimationFrameIndex % upFrames.Length]);
