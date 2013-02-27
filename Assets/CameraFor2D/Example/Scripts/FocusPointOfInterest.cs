@@ -2,8 +2,7 @@ using UnityEngine;
 using System.Collections;
 using GoodStuff.NaturalLanguage;
 
-public class FocusPointOfInterest : MonoBehaviour {
-	
+public class FocusPointOfInterest : MonoBehaviour {	
 	public CameraController2D cameraController;
 	public GameObject target;
 	public float focusDistance;
