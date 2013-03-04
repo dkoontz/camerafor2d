@@ -7,9 +7,9 @@ using GoodStuff.NaturalLanguage;
 public class CameraController2D : MonoBehaviour {
 #region Internal Types
 	public enum MovementAxis {
-//		XY,
+		XY,
 		XZ,
-//		YZ
+		YZ
 	}
 
 	class OffsetData {
@@ -232,9 +232,13 @@ public class CameraController2D : MonoBehaviour {
 
 	public void Start() {
 		switch(axis) {
-//		case MovementAxis.XY:
-//			HeightOffset = () => Vector3.forward * distance;
-//			break;
+		case MovementAxis.XY:
+			HeightOffset = () => Vector3.forward * heightFromTarget;
+			GetHorizontalComponent = (vector) => new Vector3(vector.x, 0, 0);
+			GetHorizontalValue = (vector) => vector.x;
+			GetVerticalComponent = (vector) => new Vector3(0, vector.y, 0);
+			GetVerticalValue = (vector) => vector.y;
+			break;
 		case MovementAxis.XZ:
 			HeightOffset = () => -Vector3.up * heightFromTarget;
 			GetHorizontalComponent = (vector) => new Vector3(vector.x, 0, 0);
@@ -242,9 +246,13 @@ public class CameraController2D : MonoBehaviour {
 			GetVerticalComponent = (vector) => new Vector3(0, 0, vector.z);
 			GetVerticalValue = (vector) => vector.z;
 			break;
-//		case MovementAxis.YZ:
-//			HeightOffset = () => Vector3.right * distance;
-//			break;
+		case MovementAxis.YZ:
+			HeightOffset = () => -Vector3.right * heightFromTarget;
+			GetHorizontalComponent = (vector) => new Vector3(0, 0, vector.z);
+			GetHorizontalValue = (vector) => vector.z;
+			GetVerticalComponent = (vector) => new Vector3(0, vector.y, 0);
+			GetVerticalValue = (vector) => vector.y;
+			break;
 		}
 
 		CameraSeekTarget = new GameObject("_CameraTarget").transform;
