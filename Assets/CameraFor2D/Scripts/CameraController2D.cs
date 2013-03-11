@@ -21,7 +21,10 @@ public class CameraController2D : MonoBehaviour {
 #endregion
 
 	public IEnumerable<Transform> CurrentTarget { 
-		get { return targetStack.Peek(); } 
+		get {
+			if(targetStack.IsEmpty()) return null;
+			return targetStack.Peek();
+		}
 		set { SetTarget(value); }
 	}
 
@@ -172,6 +175,8 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	public void SetTarget(IEnumerable<Transform> targets, float moveSpeed) {
+		if(targets.Any(t => null == t)) throw new System.ArgumentException("Cannot add a target that is null");
+
 		if(0 == moveSpeed) moveSpeed = maxMoveSpeedPerSecond;
 		RemoveCurrentTarget();
 		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
@@ -197,6 +202,8 @@ public class CameraController2D : MonoBehaviour {
 	}
 	
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed) {
+		if(targets.Any(t => null == t)) throw new System.ArgumentException("Cannot add a target that is null");
+
 		if(0 == moveSpeed) moveSpeed = maxMoveSpeedPerSecond;
 		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
 		panningToNewTarget = true;
@@ -205,6 +212,8 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed, float revertAfterDuration, float revertMoveSpeed) {
+		if(targets.Any(t => null == t)) throw new System.ArgumentException("Cannot add a target that is null");
+
 		if(0 == moveSpeed) moveSpeed = maxMoveSpeedPerSecond;
 		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
 		panningToNewTarget = true;
@@ -216,6 +225,8 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	public void RemoveCurrentTarget() {
+		if(targetStack.IsEmpty()) return;
+
 		targetStack.Pop();
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = maxMoveSpeedPerSecond;
@@ -230,7 +241,9 @@ public class CameraController2D : MonoBehaviour {
 		transform.position = IdealCameraPosition();
 	}
 
-	public void Start() {
+	// This must be Awake and not start to ensure that all the delegates are assigned before scripts attempt to perform
+	// any actions on the camera such as SetTarget or AddTarget.
+	public void Awake() {
 		switch(axis) {
 		case MovementAxis.XY:
 			HeightOffset = () => Vector3.forward * heightFromTarget;
@@ -256,7 +269,8 @@ public class CameraController2D : MonoBehaviour {
 		}
 
 		CameraSeekTarget = new GameObject("_CameraTarget").transform;
-		AddTarget(initialTarget);
+
+		if(initialTarget != null) AddTarget(initialTarget);
 
 		if(camera.isOrthoGraphic) originalZoom = camera.orthographicSize;
 		else originalZoom = heightFromTarget;
@@ -458,17 +472,10 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	Vector3 IdealCameraPosition() {
+		if(targetStack.IsEmpty()) return Vector3.zero;
 		var targets = targetStack.Peek();
 
-		// Hacks to avoid any memory allocation, .Count() and .First() both allocate
-		var count = 0;
-		Transform first = null;
-		foreach(var t in targets) {
-			if(0 == count) first = t;
-			++count;
-		}
-
-		if(1 == count) return first.position - HeightOffset();
+		if(1 == targets.Count()) return targets.First().position - HeightOffset();
 
 		var minHorizontal = targets.Min(t => GetHorizontalValue(t.position));
 		var maxHorizontal = targets.Max(t => GetHorizontalValue(t.position));
