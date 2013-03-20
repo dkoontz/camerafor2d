@@ -100,6 +100,9 @@ public class CameraController2D : MonoBehaviour {
 	/// </summary>
 	public float arrivalNotificationDistance = .01f;
 
+	// This defaults to the camera attached to the current GameObject
+	public Camera cameraToUse;
+
 	// Called after the initial transition to a target set via AddTarget or SetTarget
 	public System.Action OnNewTargetReached = null;
 
@@ -244,6 +247,9 @@ public class CameraController2D : MonoBehaviour {
 	// This must be Awake and not start to ensure that all the delegates are assigned before scripts attempt to perform
 	// any actions on the camera such as SetTarget or AddTarget.
 	public void Awake() {
+		if(null == cameraToUse) cameraToUse = camera;
+		if(null == cameraToUse) Debug.LogError("No camera was specified and no Camera component is attached to this GameObject, CameraController2D requires a camera to function");
+
 		switch(axis) {
 		case MovementAxis.XY:
 			HeightOffset = () => Vector3.forward * heightFromTarget;
@@ -272,7 +278,7 @@ public class CameraController2D : MonoBehaviour {
 
 		if(initialTarget != null) AddTarget(initialTarget);
 
-		if(camera.isOrthoGraphic) originalZoom = camera.orthographicSize;
+		if(cameraToUse.isOrthoGraphic) originalZoom = cameraToUse.orthographicSize;
 		else originalZoom = heightFromTarget;
 		CalculateScreenBounds();
 
@@ -325,21 +331,21 @@ public class CameraController2D : MonoBehaviour {
 	/// </summary>
 	public void CalculateScreenBounds() {
 		System.Func<Vector3, Vector3, OffsetData> AddRaycastOffsetPoint = (viewSpaceOrigin, viewSpacePoint) => {
-			if(camera.isOrthoGraphic) {
-				var origin = camera.ViewportToWorldPoint(viewSpaceOrigin);
-				var vectorToOffset = camera.ViewportToWorldPoint(viewSpacePoint) - origin;
+			if(cameraToUse.isOrthoGraphic) {
+				var origin = cameraToUse.ViewportToWorldPoint(viewSpaceOrigin);
+				var vectorToOffset = cameraToUse.ViewportToWorldPoint(viewSpacePoint) - origin;
 				return new OffsetData { StartPointRelativeToCamera = origin - transform.position, Vector = vectorToOffset, NormalizedVector = vectorToOffset.normalized, DistanceFromStartPoint = vectorToOffset.magnitude };
 			}
 			else {
 				var cameraPositionOnPlane = transform.position + (transform.forward * heightFromTarget);
 
-				var originRay = camera.ViewportPointToRay(viewSpaceOrigin);
+				var originRay = cameraToUse.ViewportPointToRay(viewSpaceOrigin);
 				var theta = Vector3.Angle(transform.forward, originRay.direction);
 				var distanceToPlane = heightFromTarget / Mathf.Cos(theta * Mathf.Deg2Rad);
 				var originPointOnPlane = originRay.origin + (originRay.direction * distanceToPlane);
 
-				var pointRay = camera.ViewportPointToRay(viewSpacePoint);
-				theta = Vector3.Angle(camera.transform.forward, pointRay.direction);
+				var pointRay = cameraToUse.ViewportPointToRay(viewSpacePoint);
+				theta = Vector3.Angle(cameraToUse.transform.forward, pointRay.direction);
 				distanceToPlane = heightFromTarget / Mathf.Cos(theta * Mathf.Deg2Rad);
 				var pointOnPlane = pointRay.origin + (pointRay.direction * distanceToPlane);
 				var vectorToOffset = pointOnPlane - originPointOnPlane;
