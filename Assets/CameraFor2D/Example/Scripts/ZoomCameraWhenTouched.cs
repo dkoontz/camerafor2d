@@ -5,6 +5,7 @@ using GoodStuff.NaturalLanguage;
 public class ZoomCameraWhenTouched : MonoBehaviour {
 	public CameraController2D cameraController;
 	public float zoomAmount;
+	public float zoomTime = 1.5f;
 
 	float disabledUntilTime;
 
@@ -16,16 +17,28 @@ public class ZoomCameraWhenTouched : MonoBehaviour {
 
 	void OnTriggerEnter() {
 		if(Time.time > disabledUntilTime) {
-			iTween.ValueTo(gameObject, iTween.Hash("from", 1, "to", 3, "time", 1.5f, "onupdate", "UpdateCameraZoom", "oncomplete", "ZoomDown"));
+			StartCoroutine(ZoomOutAndIn());
 			disabledUntilTime = Time.time + 3;
 		}
 	}
 
-	public void UpdateCameraZoom(float value) {
-		cameraController.DistanceMultiplier = value;
-	}
+	public IEnumerator ZoomOutAndIn() {
+		var value = 1f;
+		var elapsedTime = 0f;
 
-	public void ZoomDown() {
-		iTween.ValueTo(gameObject, iTween.Hash("from", 3, "to", 1, "time", 1.5f, "onupdate", "UpdateCameraZoom"));
+		while(elapsedTime < zoomTime) {
+			elapsedTime += Time.deltaTime;
+			cameraController.DistanceMultiplier = Mathf.Lerp(1, zoomAmount, elapsedTime / zoomTime);
+			yield return new WaitForEndOfFrame();
+		}
+
+		elapsedTime = 0;
+		while(elapsedTime < zoomTime) {
+			elapsedTime += Time.deltaTime;
+			cameraController.DistanceMultiplier = Mathf.Lerp(1, zoomAmount, 1 - (elapsedTime / zoomTime));
+			yield return new WaitForEndOfFrame();
+		}
+
+		cameraController.DistanceMultiplier = 1;
 	}
 }

@@ -9,9 +9,10 @@ public class AddCameraTargetWhenTouched : MonoBehaviour {
 	public float delay = 5;
 	public float revertMoveSpeed;
 
-	public bool triggerTweenAtTarget;
-	public GameObject tweenTarget;
-	public string tweenName;
+	public bool triggerSlideAtTarget;
+	public GameObject slideTarget;
+	public Vector3 slideDistance;
+	public float slideTime;
 	
 	void Start() {
 		if(cameraController == null) {
@@ -22,19 +23,36 @@ public class AddCameraTargetWhenTouched : MonoBehaviour {
 	void OnTriggerEnter() {
 
 		if(removeTargetAfterDelay) {
-			cameraController.AddTarget(targets, moveSpeed, delay, revertMoveSpeed);
+			if(triggerSlideAtTarget) {
+				cameraController.AddTarget(targets, moveSpeed, delay, revertMoveSpeed, StartSlide);
+			}
+			else {
+				cameraController.AddTarget(targets, moveSpeed, delay, revertMoveSpeed);
+			}
 		}
 		else {
-			cameraController.AddTarget(targets, moveSpeed);
-		}
-
-		if(triggerTweenAtTarget) {
-			cameraController.OnNewTargetReached += StartTween;
+			if(triggerSlideAtTarget) {
+				cameraController.AddTarget(targets, moveSpeed, StartSlide);
+			}
+			else {
+				cameraController.AddTarget(targets, moveSpeed);
+			}
 		}
 	}
 
-	void StartTween() {
-		iTweenEvent.GetEvent(tweenTarget, tweenName).Play();
-		cameraController.OnNewTargetReached -= StartTween;
+	void StartSlide() {
+		StartCoroutine(Slide());
+	}
+
+	IEnumerator Slide() {
+		var originalPosition = slideTarget.transform.position;
+		var finalPosition = slideTarget.transform.position + slideDistance;
+		var elapsedTime = 0f;
+		while(elapsedTime < slideTime) {
+			elapsedTime += Time.deltaTime;
+			slideTarget.gameObject.transform.position = Vector3.Lerp(originalPosition, finalPosition, elapsedTime / slideTime);
+			yield return new WaitForEndOfFrame();
+		}
+		slideTarget.gameObject.transform.position = finalPosition;
 	}
 }
