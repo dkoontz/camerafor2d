@@ -105,9 +105,13 @@ public class CameraController2D : MonoBehaviour {
 	/// The distance from the target where OnNewTargetReached callbacks should be sent.
 	/// </summary>
 	public float arrivalNotificationDistance = .01f;
-
-//	public Vector2 moveBox;
-	public Rect moveBox = new Rect(.5f, .5f, 0, 0);
+	
+	/// <summary>
+	/// This defines a rect in screen space (so 0.5, 0.5 is the center of the screen), that when moved around in, does
+	/// not cause the screen to move.  When exceeding any edge of the push box, the screen will move until the target
+	/// is once again inside the push box.
+	/// </summary>
+	public Rect pushBox = new Rect(.5f, .5f, 0, 0);
 
 	/// <summary>
 	/// The camera to use for collision checks with CameraBumpers.  
@@ -461,17 +465,17 @@ public class CameraController2D : MonoBehaviour {
 					if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
 
 					if(!targetWithinMoveBox && !panningToNewTarget) {
-						var topLeftPoint = new Vector2(moveBox.x - (moveBox.width / 2), moveBox.y + (moveBox.height / 2));
-						var bottomRightPoint = new Vector2(moveBox.x + (moveBox.width / 2), moveBox.y - (moveBox.height / 2));
+						var topLeftPoint = new Vector2(pushBox.x - (pushBox.width / 2), pushBox.y + (pushBox.height / 2));
+						var bottomRightPoint = new Vector2(pushBox.x + (pushBox.width / 2), pushBox.y - (pushBox.height / 2));
 						// move target to edge of move box instead of moving as far as we are able to based on deltaTime
 						// to avoid having a 3 no move, 1 move update stuttering pattern
 
-						var vectorToTargetViewportPoint = targetViewportPoint - new Vector3(moveBox.x, moveBox.y);
+						var vectorToTargetViewportPoint = targetViewportPoint - new Vector3(pushBox.x, pushBox.y);
 
 						var xDifference = 0f;
 						var yDifference = 0f;
-						if(targetViewportPoint.x < topLeftPoint.x || targetViewportPoint.x > bottomRightPoint.x) xDifference = Mathf.Abs(targetViewportPoint.x - moveBox.x) / (moveBox.width / 2);
-						if(targetViewportPoint.y > topLeftPoint.y || targetViewportPoint.y < bottomRightPoint.y) yDifference = Mathf.Abs(targetViewportPoint.y - moveBox.y) / (moveBox.height / 2);
+						if(targetViewportPoint.x < topLeftPoint.x || targetViewportPoint.x > bottomRightPoint.x) xDifference = Mathf.Abs(targetViewportPoint.x - pushBox.x) / (pushBox.width / 2);
+						if(targetViewportPoint.y > topLeftPoint.y || targetViewportPoint.y < bottomRightPoint.y) yDifference = Mathf.Abs(targetViewportPoint.y - pushBox.y) / (pushBox.height / 2);
 
 						float scaleFactor;
 
@@ -662,8 +666,8 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	bool TargetViewportPointWithinMoveBox(Vector3 target) {
-		var topLeftPoint = new Vector2(moveBox.x - (moveBox.width / 2), moveBox.y + (moveBox.height / 2));
-		var bottomRightPoint = new Vector2(moveBox.x + (moveBox.width / 2), moveBox.y - (moveBox.height / 2));
+		var topLeftPoint = new Vector2(pushBox.x - (pushBox.width / 2), pushBox.y + (pushBox.height / 2));
+		var bottomRightPoint = new Vector2(pushBox.x + (pushBox.width / 2), pushBox.y - (pushBox.height / 2));
 		return target.x >= topLeftPoint.x && target.x <= bottomRightPoint.x && target.y <= topLeftPoint.y && target.y >= bottomRightPoint.y;
 	}
 
@@ -685,8 +689,8 @@ public class CameraController2D : MonoBehaviour {
 			Gizmos.DrawWireSphere(lastCalculatedPosition, .1f);
 
 			Gizmos.color = Color.blue;
-			var topLeftPoint = new Vector2(moveBox.x - (moveBox.width / 2), moveBox.y + (moveBox.height / 2));
-			var bottomRightPoint = new Vector2(moveBox.x + (moveBox.width / 2), moveBox.y - (moveBox.height / 2));
+			var topLeftPoint = new Vector2(pushBox.x - (pushBox.width / 2), pushBox.y + (pushBox.height / 2));
+			var bottomRightPoint = new Vector2(pushBox.x + (pushBox.width / 2), pushBox.y - (pushBox.height / 2));
 
 			Gizmos.DrawLine(cameraToUse.ViewportToWorldPoint(new Vector3(topLeftPoint.x, topLeftPoint.y)), cameraToUse.ViewportToWorldPoint(new Vector3(bottomRightPoint.x, topLeftPoint.y)));
 			Gizmos.DrawLine(cameraToUse.ViewportToWorldPoint(new Vector3(topLeftPoint.x, bottomRightPoint.y)), cameraToUse.ViewportToWorldPoint(new Vector3(bottomRightPoint.x, bottomRightPoint.y)));
