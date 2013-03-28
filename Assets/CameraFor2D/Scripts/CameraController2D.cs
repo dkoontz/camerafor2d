@@ -20,6 +20,8 @@ public class CameraController2D : MonoBehaviour {
 	}
 #endregion
 
+	const string VERSION = "1.2.0";
+
 	public IEnumerable<Transform> CurrentTarget { 
 		get {
 			if(targetStack.IsEmpty()) return null;
