@@ -106,6 +106,9 @@ public class CameraController2D : MonoBehaviour {
 	/// </summary>
 	public float arrivalNotificationDistance = .01f;
 
+//	public Vector2 moveBox;
+	public Rect moveBox = new Rect(.5f, .5f, 0, 0);
+
 	/// <summary>
 	/// The camera to use for collision checks with CameraBumpers.  
 	/// Defaults to the camera attached to the current GameObject.
@@ -446,26 +449,58 @@ public class CameraController2D : MonoBehaviour {
 		}
 		else {
 			var targetPosition = idealPosition + CalculatePushBackOffset(idealPosition);
+			var targetViewportPoint = cameraToUse.WorldToViewportPoint(targetPosition);
+			var targetWithinMoveBox = TargetViewportPointWithinMoveBox(targetViewportPoint);
 
-			if(lockToTarget && !panningToNewTarget) {
+			if(lockToTarget && !panningToNewTarget && !targetWithinMoveBox) {
 				transform.position = targetPosition;
 			}
 			else {
-				var maxSpeed = maxMoveSpeedPerSecond;
-				if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
-				
-				var vectorToTarget = targetPosition - position;
-				var vectorToTargetAlongPlane = GetHorizontalComponent(vectorToTarget) + GetVerticalComponent(vectorToTarget);
-				var interpolatedPosition = Vector3.zero;
-				var xDelta = Mathf.Abs(vectorToTargetAlongPlane.x);
-				var yDelta = Mathf.Abs(vectorToTargetAlongPlane.y);
-				var zDelta = Mathf.Abs(vectorToTargetAlongPlane.z);
-				var xyzTotal = xDelta + yDelta + zDelta;
-				
-				interpolatedPosition.x = Mathf.SmoothDamp(position.x, targetPosition.x, ref velocity.x, damping, maxSpeed * (xDelta / xyzTotal));
-				interpolatedPosition.y = Mathf.SmoothDamp(position.y, targetPosition.y, ref velocity.y, damping, maxSpeed * (yDelta / xyzTotal));
-				interpolatedPosition.z = Mathf.SmoothDamp(position.z, targetPosition.z, ref velocity.z, damping, maxSpeed * (zDelta / xyzTotal));
-				transform.position = interpolatedPosition;
+				if(panningToNewTarget || !targetWithinMoveBox) {
+					var maxSpeed = maxMoveSpeedPerSecond;
+					if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
+
+					if(!targetWithinMoveBox && !panningToNewTarget) {
+						var topLeftPoint = new Vector2(moveBox.x - (moveBox.width / 2), moveBox.y + (moveBox.height / 2));
+						var bottomRightPoint = new Vector2(moveBox.x + (moveBox.width / 2), moveBox.y - (moveBox.height / 2));
+						// move target to edge of move box instead of moving as far as we are able to based on deltaTime
+						// to avoid having a 3 no move, 1 move update stuttering pattern
+
+						var vectorToTargetViewportPoint = targetViewportPoint - new Vector3(moveBox.x, moveBox.y);
+
+						var xDifference = 0f;
+						var yDifference = 0f;
+						if(targetViewportPoint.x < topLeftPoint.x || targetViewportPoint.x > bottomRightPoint.x) xDifference = Mathf.Abs(targetViewportPoint.x - moveBox.x) / (moveBox.width / 2);
+						if(targetViewportPoint.y > topLeftPoint.y || targetViewportPoint.y < bottomRightPoint.y) yDifference = Mathf.Abs(targetViewportPoint.y - moveBox.y) / (moveBox.height / 2);
+
+						float scaleFactor;
+
+						if(xDifference > yDifference) {
+							scaleFactor = 1 - (1 / xDifference);
+						}
+						else {
+							scaleFactor = 1 - (1 / yDifference);
+						}
+
+						targetPosition = transform.position + ((targetPosition - position) * scaleFactor);
+					}
+
+					var vectorToTarget = targetPosition - position;
+					var vectorToTargetAlongPlane = GetHorizontalComponent(vectorToTarget) + GetVerticalComponent(vectorToTarget);
+					var interpolatedPosition = Vector3.zero;
+					var xDelta = Mathf.Abs(vectorToTargetAlongPlane.x);
+					var yDelta = Mathf.Abs(vectorToTargetAlongPlane.y);
+					var zDelta = Mathf.Abs(vectorToTargetAlongPlane.z);
+					var xyzTotal = xDelta + yDelta + zDelta;
+					
+					interpolatedPosition.x = Mathf.SmoothDamp(position.x, targetPosition.x, ref velocity.x, damping, maxSpeed * (xDelta / xyzTotal));
+					interpolatedPosition.y = Mathf.SmoothDamp(position.y, targetPosition.y, ref velocity.y, damping, maxSpeed * (yDelta / xyzTotal));
+					interpolatedPosition.z = Mathf.SmoothDamp(position.z, targetPosition.z, ref velocity.z, damping, maxSpeed * (zDelta / xyzTotal));
+					transform.position = interpolatedPosition;
+				}
+				else {
+					velocity = Vector3.zero;
+				}
 			}
 
 			#if UNITY_EDITOR
@@ -626,6 +661,12 @@ public class CameraController2D : MonoBehaviour {
 		targetStack.Pop();
 	}
 
+	bool TargetViewportPointWithinMoveBox(Vector3 target) {
+		var topLeftPoint = new Vector2(moveBox.x - (moveBox.width / 2), moveBox.y + (moveBox.height / 2));
+		var bottomRightPoint = new Vector2(moveBox.x + (moveBox.width / 2), moveBox.y - (moveBox.height / 2));
+		return target.x >= topLeftPoint.x && target.x <= bottomRightPoint.x && target.y <= topLeftPoint.y && target.y >= bottomRightPoint.y;
+	}
+
 #if UNITY_EDITOR
 	void OnDrawGizmos() {
 		if(Application.isPlaying && drawDebugLines) {
@@ -642,7 +683,19 @@ public class CameraController2D : MonoBehaviour {
 
 			Gizmos.color = Color.magenta;
 			Gizmos.DrawWireSphere(lastCalculatedPosition, .1f);
+
+			Gizmos.color = Color.blue;
+			var topLeftPoint = new Vector2(moveBox.x - (moveBox.width / 2), moveBox.y + (moveBox.height / 2));
+			var bottomRightPoint = new Vector2(moveBox.x + (moveBox.width / 2), moveBox.y - (moveBox.height / 2));
+
+			Gizmos.DrawLine(cameraToUse.ViewportToWorldPoint(new Vector3(topLeftPoint.x, topLeftPoint.y)), cameraToUse.ViewportToWorldPoint(new Vector3(bottomRightPoint.x, topLeftPoint.y)));
+			Gizmos.DrawLine(cameraToUse.ViewportToWorldPoint(new Vector3(topLeftPoint.x, bottomRightPoint.y)), cameraToUse.ViewportToWorldPoint(new Vector3(bottomRightPoint.x, bottomRightPoint.y)));
+
+			Gizmos.DrawLine(cameraToUse.ViewportToWorldPoint(new Vector3(topLeftPoint.x, topLeftPoint.y)), cameraToUse.ViewportToWorldPoint(new Vector3(topLeftPoint.x, bottomRightPoint.y)));
+			Gizmos.DrawLine(cameraToUse.ViewportToWorldPoint(new Vector3(bottomRightPoint.x, topLeftPoint.y)), cameraToUse.ViewportToWorldPoint(new Vector3(bottomRightPoint.x, bottomRightPoint.y)));
+
 		}
 	}
+
 #endif
 }
