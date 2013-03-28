@@ -85,12 +85,6 @@ public class CameraController2D : MonoBehaviour {
 	public Transform initialTarget;
 
 	/// <summary>
-	/// Overrides all damping settings and movement speed settings.  Equivalent to having 0.015 damping and infinite
-	/// move speed.
-	/// </summary>
-	public bool lockToTarget;
-
-	/// <summary>
 	/// The maximum move speed allowed when moving towards the camera's target
 	/// </summary>
 	public float maxMoveSpeedPerSecond = 10;
@@ -276,8 +270,7 @@ public class CameraController2D : MonoBehaviour {
 	/// 
 	/// </summary>
 	/// <param name="targets">An IEnumerable<Transform> of targets to be focused.</param>
-	/// <param name="moveSpeed">The speed to move while transitioning to the new target. This value will override
-	/// lockToTarget until the camera has panned to the new target.</param>
+	/// <param name="moveSpeed">The speed to move while transitioning to the new target.</param>
 	/// <param name="callback">A System.Action to be run when arriving at the new target.</param>
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed, System.Action callback) {
 		if(targets.Any(t => null == t)) throw new System.ArgumentException("Cannot add a target that is null");
@@ -304,8 +297,7 @@ public class CameraController2D : MonoBehaviour {
 	/// 
 	/// </summary>
 	/// <param name="targets">An IEnumerable<Transform> of targets to be focused.</param>
-	/// <param name="moveSpeed">The speed to move while transitioning to the new target. This value will override
-	/// lockToTarget until the camera has panned to the new target.</param>
+	/// <param name="moveSpeed">The speed to move while transitioning to the new target.</param>
 	/// <param name="revertAfterDuration">Should the newly added target be automatically removed after a duration.</param>
 	/// <param name="revertMoveSpeed">The speed to move when returning to the original target.</param>
 	/// <param name="callback">A System.Action to be run when arriving at the new target.</param>
@@ -456,56 +448,52 @@ public class CameraController2D : MonoBehaviour {
 			var targetViewportPoint = cameraToUse.WorldToViewportPoint(targetPosition);
 			var targetWithinMoveBox = TargetViewportPointWithinMoveBox(targetViewportPoint);
 
-			if(lockToTarget && !panningToNewTarget && !targetWithinMoveBox) {
-				transform.position = targetPosition;
-			}
-			else {
-				if(panningToNewTarget || !targetWithinMoveBox) {
-					var maxSpeed = maxMoveSpeedPerSecond;
-					if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
+			if(panningToNewTarget || !targetWithinMoveBox) {
+				var maxSpeed = maxMoveSpeedPerSecond;
+				if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
 
-					if(!targetWithinMoveBox && !panningToNewTarget) {
-						var topLeftPoint = new Vector2(pushBox.x - (pushBox.width / 2), pushBox.y + (pushBox.height / 2));
-						var bottomRightPoint = new Vector2(pushBox.x + (pushBox.width / 2), pushBox.y - (pushBox.height / 2));
-						// move target to edge of move box instead of moving as far as we are able to based on deltaTime
-						// to avoid having a 3 no move, 1 move update stuttering pattern
+				if(!targetWithinMoveBox && !panningToNewTarget) {
+					var topLeftPoint = new Vector2(pushBox.x - (pushBox.width / 2), pushBox.y + (pushBox.height / 2));
+					var bottomRightPoint = new Vector2(pushBox.x + (pushBox.width / 2), pushBox.y - (pushBox.height / 2));
+					// move target to edge of move box instead of moving as far as we are able to based on deltaTime
+					// to avoid having a 3 no move, 1 move update stuttering pattern
 
-						var vectorToTargetViewportPoint = targetViewportPoint - new Vector3(pushBox.x, pushBox.y);
+					var vectorToTargetViewportPoint = targetViewportPoint - new Vector3(pushBox.x, pushBox.y);
 
-						var xDifference = 0f;
-						var yDifference = 0f;
-						if(targetViewportPoint.x < topLeftPoint.x || targetViewportPoint.x > bottomRightPoint.x) xDifference = Mathf.Abs(targetViewportPoint.x - pushBox.x) / (pushBox.width / 2);
-						if(targetViewportPoint.y > topLeftPoint.y || targetViewportPoint.y < bottomRightPoint.y) yDifference = Mathf.Abs(targetViewportPoint.y - pushBox.y) / (pushBox.height / 2);
+					var xDifference = 0f;
+					var yDifference = 0f;
+					if(targetViewportPoint.x < topLeftPoint.x || targetViewportPoint.x > bottomRightPoint.x) xDifference = Mathf.Abs(targetViewportPoint.x - pushBox.x) / (pushBox.width / 2);
+					if(targetViewportPoint.y > topLeftPoint.y || targetViewportPoint.y < bottomRightPoint.y) yDifference = Mathf.Abs(targetViewportPoint.y - pushBox.y) / (pushBox.height / 2);
 
-						float scaleFactor;
+					float scaleFactor;
 
-						if(xDifference > yDifference) {
-							scaleFactor = 1 - (1 / xDifference);
-						}
-						else {
-							scaleFactor = 1 - (1 / yDifference);
-						}
-
-						targetPosition = transform.position + ((targetPosition - position) * scaleFactor);
+					if(xDifference > yDifference) {
+						scaleFactor = 1 - (1 / xDifference);
+					}
+					else {
+						scaleFactor = 1 - (1 / yDifference);
 					}
 
-					var vectorToTarget = targetPosition - position;
-					var vectorToTargetAlongPlane = GetHorizontalComponent(vectorToTarget) + GetVerticalComponent(vectorToTarget);
-					var interpolatedPosition = Vector3.zero;
-					var xDelta = Mathf.Abs(vectorToTargetAlongPlane.x);
-					var yDelta = Mathf.Abs(vectorToTargetAlongPlane.y);
-					var zDelta = Mathf.Abs(vectorToTargetAlongPlane.z);
-					var xyzTotal = xDelta + yDelta + zDelta;
-					
-					interpolatedPosition.x = Mathf.SmoothDamp(position.x, targetPosition.x, ref velocity.x, damping, maxSpeed * (xDelta / xyzTotal));
-					interpolatedPosition.y = Mathf.SmoothDamp(position.y, targetPosition.y, ref velocity.y, damping, maxSpeed * (yDelta / xyzTotal));
-					interpolatedPosition.z = Mathf.SmoothDamp(position.z, targetPosition.z, ref velocity.z, damping, maxSpeed * (zDelta / xyzTotal));
-					transform.position = interpolatedPosition;
+					targetPosition = transform.position + ((targetPosition - position) * scaleFactor);
 				}
-				else {
-					velocity = Vector3.zero;
-				}
+
+				var vectorToTarget = targetPosition - position;
+				var vectorToTargetAlongPlane = GetHorizontalComponent(vectorToTarget) + GetVerticalComponent(vectorToTarget);
+				var interpolatedPosition = Vector3.zero;
+				var xDelta = Mathf.Abs(vectorToTargetAlongPlane.x);
+				var yDelta = Mathf.Abs(vectorToTargetAlongPlane.y);
+				var zDelta = Mathf.Abs(vectorToTargetAlongPlane.z);
+				var xyzTotal = xDelta + yDelta + zDelta;
+				
+				interpolatedPosition.x = Mathf.SmoothDamp(position.x, targetPosition.x, ref velocity.x, damping, maxSpeed * (xDelta / xyzTotal));
+				interpolatedPosition.y = Mathf.SmoothDamp(position.y, targetPosition.y, ref velocity.y, damping, maxSpeed * (yDelta / xyzTotal));
+				interpolatedPosition.z = Mathf.SmoothDamp(position.z, targetPosition.z, ref velocity.z, damping, maxSpeed * (zDelta / xyzTotal));
+				transform.position = interpolatedPosition;
 			}
+			else {
+				velocity = Vector3.zero;
+			}
+
 
 			#if UNITY_EDITOR
 			if (drawDebugLines) {
