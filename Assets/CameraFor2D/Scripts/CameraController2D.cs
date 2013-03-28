@@ -80,14 +80,20 @@ public class CameraController2D : MonoBehaviour {
 	public float heightFromTarget;
 
 	/// <summary>
-	/// The maximum move speed allowed when moving towards the camera's target
-	/// </summary>
-	public float maxMoveSpeedPerSecond = 10;
-
-	/// <summary>
 	/// Eqivalent to calling AddTarget with this Transform
 	/// </summary>
 	public Transform initialTarget;
+
+	/// <summary>
+	/// Overrides all damping settings and movement speed settings.  Equivalent to having 0.015 damping and infinite
+	/// move speed.
+	/// </summary>
+	public bool lockToTarget;
+
+	/// <summary>
+	/// The maximum move speed allowed when moving towards the camera's target
+	/// </summary>
+	public float maxMoveSpeedPerSecond = 10;
 
 	/// <summary>
 	/// Damping is a slowing or delay factor for the camera's movement.  Higher damping creates a "squishier"
@@ -100,10 +106,15 @@ public class CameraController2D : MonoBehaviour {
 	/// </summary>
 	public float arrivalNotificationDistance = .01f;
 
-	// This defaults to the camera attached to the current GameObject
+	/// <summary>
+	/// The camera to use for collision checks with CameraBumpers.  
+	/// Defaults to the camera attached to the current GameObject.
+	/// </summary>
 	public Camera cameraToUse;
 
-	// Should the movement caculations be performed in FixedUpdate instead of LateUpdate
+	/// <summary>
+	/// Should the movement caculations be performed in FixedUpdate instead of LateUpdate
+	/// </summary>
 	public bool useFixedUpdate;
 
 	// Called after the initial transition to a target set via AddTarget or SetTarget
@@ -124,7 +135,7 @@ public class CameraController2D : MonoBehaviour {
 	public bool drawDebugLines;
 #endif
 
-	const float CAMERA_ARRIVAL_DISTANCE = .001f;
+	const float CAMERA_ARRIVAL_DISTANCE = .01f;
 	const float CAMERA_ARRIVAL_DISTANCE_SQUARED = CAMERA_ARRIVAL_DISTANCE * CAMERA_ARRIVAL_DISTANCE;
 
 	Transform CameraSeekTarget { get; set; }
@@ -154,12 +165,14 @@ public class CameraController2D : MonoBehaviour {
 	List<Vector3> influences = new List<Vector3>(5);
 	bool panningToNewTarget;
 	float panningToNewTargetSpeed;
+	bool arrivalNotificationSent;
 	System.Action arrivedAtNewTargetCallback;
 	float arrivalNotificationDistanceSquared;
 	float distanceMultiplier = 1;
 	float originalZoom;
 	float revertAfterDuration;
 	float revertMoveSpeed;
+	float acceleration;
 
 #if UNITY_EDITOR
 	readonly Color ORANGE_COLOR = new Color(1, .8f, 0);
@@ -173,15 +186,31 @@ public class CameraController2D : MonoBehaviour {
 		SetTarget(new [] { target });
 	}
 
+	public void SetTarget(Transform target, System.Action callback) {
+		SetTarget(new [] { target }, callback);
+	}
+
 	public void SetTarget(Transform target, float moveSpeed) {
 		SetTarget(new [] { target }, moveSpeed);
 	}
 
+	public void SetTarget(Transform target, float moveSpeed, System.Action callback) {
+		SetTarget(new [] { target }, moveSpeed, callback);
+	}
+
 	public void SetTarget(IEnumerable<Transform> targets) {
-		SetTarget(targets, maxMoveSpeedPerSecond);
+		SetTarget(targets, null);
+	}
+
+	public void SetTarget(IEnumerable<Transform> targets, System.Action callback) {
+		SetTarget(targets, maxMoveSpeedPerSecond, callback);
 	}
 
 	public void SetTarget(IEnumerable<Transform> targets, float moveSpeed) {
+		SetTarget(targets, moveSpeed, null);
+	}
+
+	public void SetTarget(IEnumerable<Transform> targets, float moveSpeed, System.Action callback) {
 		if(targets.Any(t => null == t)) throw new System.ArgumentException("Cannot add a target that is null");
 
 		if(0 == moveSpeed) moveSpeed = maxMoveSpeedPerSecond;
@@ -189,7 +218,13 @@ public class CameraController2D : MonoBehaviour {
 		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
+		arrivalNotificationSent = false;
 		if(OnTargetSwitched != null) OnTargetSwitched();
+
+		if(callback != null) {
+			if(arrivedAtNewTargetCallback != null) arrivedAtNewTargetCallback += callback;
+			else arrivedAtNewTargetCallback = callback;
+		}
 	}
 
 	public void AddTarget(Transform target) {
@@ -228,6 +263,15 @@ public class CameraController2D : MonoBehaviour {
 		AddTarget(targets, moveSpeed, null);
 	}
 
+	/// <summary>
+	/// Adds one or more targets to the target stack.  Each variation of AddTarget has a version that takes a single
+	/// Transform as well as an IEnumerable<Transform>.  <seealso cref="AddTarget(Transform target, float moveSpeed, System.Action callback)">
+	/// 
+	/// </summary>
+	/// <param name="targets">An IEnumerable<Transform> of targets to be focused.</param>
+	/// <param name="moveSpeed">The speed to move while transitioning to the new target. This value will override
+	/// lockToTarget until the camera has panned to the new target.</param>
+	/// <param name="callback">A System.Action to be run when arriving at the new target.</param>
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed, System.Action callback) {
 		if(targets.Any(t => null == t)) throw new System.ArgumentException("Cannot add a target that is null");
 
@@ -235,6 +279,7 @@ public class CameraController2D : MonoBehaviour {
 		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
+		arrivalNotificationSent = false;
 		if(OnTargetAdded != null) OnTargetAdded();
 		if(callback != null) {
 			if(arrivedAtNewTargetCallback != null) arrivedAtNewTargetCallback += callback;
@@ -246,6 +291,17 @@ public class CameraController2D : MonoBehaviour {
 		AddTarget(targets, moveSpeed, revertAfterDuration, revertMoveSpeed, null);
 	}
 
+	/// <summary>
+	/// Adds one or more targets to the target stack.  Each variation of AddTarget has a version that takes a single
+	/// Transform as well as an IEnumerable<Transform>.  <seealso cref="AddTarget(Transform target, float moveSpeed, float revertAfterDuration, float revertMoveSpeed, System.Action callback)">
+	/// 
+	/// </summary>
+	/// <param name="targets">An IEnumerable<Transform> of targets to be focused.</param>
+	/// <param name="moveSpeed">The speed to move while transitioning to the new target. This value will override
+	/// lockToTarget until the camera has panned to the new target.</param>
+	/// <param name="revertAfterDuration">Should the newly added target be automatically removed after a duration.</param>
+	/// <param name="revertMoveSpeed">The speed to move when returning to the original target.</param>
+	/// <param name="callback">A System.Action to be run when arriving at the new target.</param>
 	public void AddTarget(IEnumerable<Transform> targets, float moveSpeed, float revertAfterDuration, float revertMoveSpeed, System.Action callback) {
 		if(targets.Any(t => null == t)) throw new System.ArgumentException("Cannot add a target that is null");
 
@@ -253,6 +309,7 @@ public class CameraController2D : MonoBehaviour {
 		targetStack.Push(new IEnumerableThatIgnoresNull<Transform>(targets));
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = moveSpeed;
+		arrivalNotificationSent = false;
 		this.revertAfterDuration = revertAfterDuration;
 		this.revertMoveSpeed = revertMoveSpeed;
 		OnNewTargetReached += RevertAfterReachingTarget;
@@ -270,6 +327,7 @@ public class CameraController2D : MonoBehaviour {
 		targetStack.Pop();
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = maxMoveSpeedPerSecond;
+		arrivalNotificationSent = false;
 	}
 
 	public void AddInfluence(Vector3 influence) {
@@ -379,44 +437,63 @@ public class CameraController2D : MonoBehaviour {
 	}
 
 	void ApplyMovement() {
-		if (!ExclusiveModeEnabled)
-			CameraSeekTarget.position = IdealCameraPosition () + TotalInfluence ();
+		var position = transform.position;
+
+		if(!ExclusiveModeEnabled) CameraSeekTarget.position = IdealCameraPosition() + TotalInfluence();
 		var idealPosition = CameraSeekPosition;
-		if ((idealPosition - transform.position).sqrMagnitude > CAMERA_ARRIVAL_DISTANCE_SQUARED) {
-			var targetPosition = idealPosition + CalculatePushBackOffset (idealPosition);
-			var maxSpeed = maxMoveSpeedPerSecond;
-			if (panningToNewTarget)
-				maxSpeed = panningToNewTargetSpeed;
-			var interpolatedPosition = Vector3.zero;
-			interpolatedPosition.x = Mathf.SmoothDamp (transform.position.x, targetPosition.x, ref velocity.x, damping, maxSpeed);
-			interpolatedPosition.y = Mathf.SmoothDamp (transform.position.y, targetPosition.y, ref velocity.y, damping, maxSpeed);
-			interpolatedPosition.z = Mathf.SmoothDamp (transform.position.z, targetPosition.z, ref velocity.z, damping, maxSpeed);
-			transform.position = interpolatedPosition;
+		if((idealPosition - position).sqrMagnitude <= CAMERA_ARRIVAL_DISTANCE_SQUARED) {
+			panningToNewTarget = false;
+		}
+		else {
+			var targetPosition = idealPosition + CalculatePushBackOffset(idealPosition);
+
+			if(lockToTarget && !panningToNewTarget) {
+				transform.position = targetPosition;
+			}
+			else {
+				var maxSpeed = maxMoveSpeedPerSecond;
+				if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
+				
+				var vectorToTarget = targetPosition - position;
+				var vectorToTargetAlongPlane = GetHorizontalComponent(vectorToTarget) + GetVerticalComponent(vectorToTarget);
+				var interpolatedPosition = Vector3.zero;
+				var xDelta = Mathf.Abs(vectorToTargetAlongPlane.x);
+				var yDelta = Mathf.Abs(vectorToTargetAlongPlane.y);
+				var zDelta = Mathf.Abs(vectorToTargetAlongPlane.z);
+				var xyzTotal = xDelta + yDelta + zDelta;
+				
+				interpolatedPosition.x = Mathf.SmoothDamp(position.x, targetPosition.x, ref velocity.x, damping, maxSpeed * (xDelta / xyzTotal));
+				interpolatedPosition.y = Mathf.SmoothDamp(position.y, targetPosition.y, ref velocity.y, damping, maxSpeed * (yDelta / xyzTotal));
+				interpolatedPosition.z = Mathf.SmoothDamp(position.z, targetPosition.z, ref velocity.z, damping, maxSpeed * (zDelta / xyzTotal));
+				transform.position = interpolatedPosition;
+			}
+
 			#if UNITY_EDITOR
 			if (drawDebugLines) {
-				lastCalculatedPosition = interpolatedPosition;
-				lastCalculatedIdealPosition = IdealCameraPosition ();
-				lastCalculatedInfluence = TotalInfluence ();
+				lastCalculatedPosition = transform.position;
+				lastCalculatedIdealPosition = IdealCameraPosition();
+				lastCalculatedInfluence = TotalInfluence();
 				influencesForGizmoRendering = new Vector3[influences.Count];
-				influences.CopyTo (influencesForGizmoRendering);
+				influences.CopyTo(influencesForGizmoRendering);
 			}
 			#endif
-			if (panningToNewTarget && (targetPosition - transform.position).sqrMagnitude <= arrivalNotificationDistanceSquared) {
+
+			if(!arrivalNotificationSent && panningToNewTarget && (targetPosition - position).sqrMagnitude <= arrivalNotificationDistanceSquared) {
 				if(OnNewTargetReached != null) OnNewTargetReached();
 				if(arrivedAtNewTargetCallback != null) {
 					arrivedAtNewTargetCallback();
 					arrivedAtNewTargetCallback = null;
 				}
-				panningToNewTarget = false;
+				arrivalNotificationSent = true;
 			}
 		}
-		influences.Clear ();
+		influences.Clear();
 	}
 
 	Vector3 CalculatePushBackOffset(Vector3 idealPosition) {
-		var idealCenterPointAtPlayerHeight = idealPosition + HeightOffset ();
-		var horizontalVector = GetHorizontalComponent (Vector3.one).normalized;
-		var verticalVector = GetVerticalComponent (Vector3.one).normalized;
+		var idealCenterPointAtPlayerHeight = idealPosition + HeightOffset();
+		var horizontalVector = GetHorizontalComponent(Vector3.one).normalized;
+		var verticalVector = GetVerticalComponent(Vector3.one).normalized;
 		var horizontalFacing = 0;
 		var verticalFacing = 0;
 		var horizontalPushBack = 0f;
@@ -545,6 +622,7 @@ public class CameraController2D : MonoBehaviour {
 		yield return new WaitForSeconds(delay);
 		panningToNewTarget = true;
 		panningToNewTargetSpeed = revertMoveSpeed;
+		arrivalNotificationSent = false;
 		targetStack.Pop();
 	}
 
