@@ -378,9 +378,9 @@ public class CameraController2D : MonoBehaviour {
 		else originalZoom = heightFromTarget;
 		CalculateScreenBounds();
 
-		ExclusiveModeEnabled = true;
-		JumpToIdealPosition();
-		ExclusiveModeEnabled = false;
+		var idealPosition = IdealCameraPosition();
+		transform.position = idealPosition + CalculatePushBackOffset(idealPosition);
+
 		arrivalNotificationDistanceSquared = arrivalNotificationDistance * arrivalNotificationDistance;
 	}
 
