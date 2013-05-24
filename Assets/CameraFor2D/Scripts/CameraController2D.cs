@@ -20,7 +20,7 @@ public class CameraController2D : MonoBehaviour {
 	}
 #endregion
 
-	const string VERSION = "1.2.0";
+	const string VERSION = "1.2.1";
 
 	public IEnumerable<Transform> CurrentTarget { 
 		get {
