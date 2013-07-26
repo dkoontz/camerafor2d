@@ -20,7 +20,7 @@ public class CameraController2D : MonoBehaviour {
 	}
 #endregion
 
-	const string VERSION = "1.2.1";
+	const string VERSION = "1.2.2";
 
 	public IEnumerable<Transform> CurrentTarget { 
 		get {
@@ -372,14 +372,17 @@ public class CameraController2D : MonoBehaviour {
 
 		CameraSeekTarget = new GameObject("_CameraTarget").transform;
 
-		if(initialTarget != null) AddTarget(initialTarget);
-
 		if(cameraToUse.isOrthoGraphic) originalZoom = cameraToUse.orthographicSize;
 		else originalZoom = heightFromTarget;
 		CalculateScreenBounds();
 
-		var idealPosition = IdealCameraPosition();
-		transform.position = idealPosition + CalculatePushBackOffset(idealPosition);
+		if(initialTarget != null) {
+			AddTarget(initialTarget);
+
+			var idealPosition = IdealCameraPosition();
+			transform.position = idealPosition + CalculatePushBackOffset(idealPosition);
+		}
+
 
 		arrivalNotificationDistanceSquared = arrivalNotificationDistance * arrivalNotificationDistance;
 	}
@@ -459,8 +462,6 @@ public class CameraController2D : MonoBehaviour {
 					var bottomRightPoint = new Vector2(pushBox.x + (pushBox.width / 2), pushBox.y - (pushBox.height / 2));
 					// move target to edge of move box instead of moving as far as we are able to based on deltaTime
 					// to avoid having a 3 no move, 1 move update stuttering pattern
-
-					var vectorToTargetViewportPoint = targetViewportPoint - new Vector3(pushBox.x, pushBox.y);
 
 					var xDifference = 0f;
 					var yDifference = 0f;

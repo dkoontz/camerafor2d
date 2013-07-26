@@ -23,7 +23,6 @@ public class ZoomCameraWhenTouched : MonoBehaviour {
 	}
 
 	public IEnumerator ZoomOutAndIn() {
-		var value = 1f;
 		var elapsedTime = 0f;
 
 		while(elapsedTime < zoomTime) {
