@@ -20,7 +20,7 @@ public class CameraController2D : MonoBehaviour {
 	}
 #endregion
 
-	const string VERSION = "1.2.2";
+	const string VERSION = "1.2.3";
 
 	public IEnumerable<Transform> CurrentTarget { 
 		get {
@@ -340,6 +340,11 @@ public class CameraController2D : MonoBehaviour {
 		transform.position = IdealCameraPosition();
 	}
 
+	public void JumpToTargetRespectingBumpersAndInfluences() {
+		var idealPosition = IdealCameraPosition() + TotalInfluence();
+		transform.position = idealPosition + CalculatePushBackOffset(idealPosition);
+	}
+
 	// This must be Awake and not start to ensure that all the delegates are assigned before scripts attempt to perform
 	// any actions on the camera such as SetTarget or AddTarget.
 	public void Awake() {
@@ -379,8 +384,7 @@ public class CameraController2D : MonoBehaviour {
 		if(initialTarget != null) {
 			AddTarget(initialTarget);
 
-			var idealPosition = IdealCameraPosition();
-			transform.position = idealPosition + CalculatePushBackOffset(idealPosition);
+			JumpToTargetRespectingBumpersAndInfluences();
 		}
 
 

@@ -9,11 +9,9 @@ public class InstantiatePlayer : MonoBehaviour {
 
 	void Start() {
 		var player = Object.Instantiate(playerObject, positionToInstantiateAt.position, positionToInstantiateAt.rotation) as GameObject;
-		cameraController.SetTarget (player.transform);
+		cameraController.SetTarget(player.transform);
 		if(snapCameraToInstantiationPoint) {
-			cameraController.ExclusiveModeEnabled = true;
-			cameraController.JumpToIdealPosition();
-			cameraController.ExclusiveModeEnabled = false;
+			cameraController.JumpToTargetRespectingBumpersAndInfluences();
 		}
 	}
 }
