@@ -383,10 +383,8 @@ public class CameraController2D : MonoBehaviour {
 
 		if(initialTarget != null) {
 			AddTarget(initialTarget);
-
 			JumpToTargetRespectingBumpersAndInfluences();
 		}
-
 
 		arrivalNotificationDistanceSquared = arrivalNotificationDistance * arrivalNotificationDistance;
 	}
@@ -449,78 +447,75 @@ public class CameraController2D : MonoBehaviour {
 
 		if(!ExclusiveModeEnabled) CameraSeekTarget.position = IdealCameraPosition() + TotalInfluence();
 		var idealPosition = CameraSeekPosition;
-		if((idealPosition - position).sqrMagnitude <= CAMERA_ARRIVAL_DISTANCE_SQUARED) {
-			panningToNewTarget = false;
+		var targetPosition = idealPosition + CalculatePushBackOffset(idealPosition);
+
+		var targetViewportPoint = cameraToUse.WorldToViewportPoint(targetPosition);
+		var targetWithinMoveBox = TargetViewportPointWithinMoveBox(targetViewportPoint);
+
+		if(panningToNewTarget || !targetWithinMoveBox) {
+			var maxSpeed = maxMoveSpeedPerSecond;
+			if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
+			if(!targetWithinMoveBox && !panningToNewTarget) {
+				var topLeftPoint = new Vector2(pushBox.x - (pushBox.width / 2), pushBox.y + (pushBox.height / 2));
+				var bottomRightPoint = new Vector2(pushBox.x + (pushBox.width / 2), pushBox.y - (pushBox.height / 2));
+				// move target to edge of move box instead of moving as far as we are able to based on deltaTime
+				// to avoid having a 3 no move, 1 move update stuttering pattern
+
+				var xDifference = 0f;
+				var yDifference = 0f;
+				if(targetViewportPoint.x < topLeftPoint.x || targetViewportPoint.x > bottomRightPoint.x) xDifference = Mathf.Abs(targetViewportPoint.x - pushBox.x) / (pushBox.width / 2);
+				if(targetViewportPoint.y > topLeftPoint.y || targetViewportPoint.y < bottomRightPoint.y) yDifference = Mathf.Abs(targetViewportPoint.y - pushBox.y) / (pushBox.height / 2);
+
+				float scaleFactor;
+
+				if(xDifference > yDifference) {
+					scaleFactor = 1 - (1 / xDifference);
+				}
+				else {
+					scaleFactor = 1 - (1 / yDifference);
+				}
+
+				targetPosition = transform.position + ((targetPosition - position) * scaleFactor);
+			}
+
+			var vectorToTarget = targetPosition - position;
+			var vectorToTargetAlongPlane = GetHorizontalComponent(vectorToTarget) + GetVerticalComponent(vectorToTarget);
+			var interpolatedPosition = Vector3.zero;
+			var xDelta = Mathf.Abs(vectorToTargetAlongPlane.x);
+			var yDelta = Mathf.Abs(vectorToTargetAlongPlane.y);
+			var zDelta = Mathf.Abs(vectorToTargetAlongPlane.z);
+			var xyzTotal = xDelta + yDelta + zDelta;
+			
+			interpolatedPosition.x = Mathf.SmoothDamp(position.x, targetPosition.x, ref velocity.x, damping, maxSpeed * (xDelta / xyzTotal));
+			interpolatedPosition.y = Mathf.SmoothDamp(position.y, targetPosition.y, ref velocity.y, damping, maxSpeed * (yDelta / xyzTotal));
+			interpolatedPosition.z = Mathf.SmoothDamp(position.z, targetPosition.z, ref velocity.z, damping, maxSpeed * (zDelta / xyzTotal));
+			transform.position = interpolatedPosition;
 		}
 		else {
-			var targetPosition = idealPosition + CalculatePushBackOffset(idealPosition);
-			var targetViewportPoint = cameraToUse.WorldToViewportPoint(targetPosition);
-			var targetWithinMoveBox = TargetViewportPointWithinMoveBox(targetViewportPoint);
-
-			if(panningToNewTarget || !targetWithinMoveBox) {
-				var maxSpeed = maxMoveSpeedPerSecond;
-				if(panningToNewTarget) maxSpeed = panningToNewTargetSpeed;
-
-				if(!targetWithinMoveBox && !panningToNewTarget) {
-					var topLeftPoint = new Vector2(pushBox.x - (pushBox.width / 2), pushBox.y + (pushBox.height / 2));
-					var bottomRightPoint = new Vector2(pushBox.x + (pushBox.width / 2), pushBox.y - (pushBox.height / 2));
-					// move target to edge of move box instead of moving as far as we are able to based on deltaTime
-					// to avoid having a 3 no move, 1 move update stuttering pattern
-
-					var xDifference = 0f;
-					var yDifference = 0f;
-					if(targetViewportPoint.x < topLeftPoint.x || targetViewportPoint.x > bottomRightPoint.x) xDifference = Mathf.Abs(targetViewportPoint.x - pushBox.x) / (pushBox.width / 2);
-					if(targetViewportPoint.y > topLeftPoint.y || targetViewportPoint.y < bottomRightPoint.y) yDifference = Mathf.Abs(targetViewportPoint.y - pushBox.y) / (pushBox.height / 2);
-
-					float scaleFactor;
-
-					if(xDifference > yDifference) {
-						scaleFactor = 1 - (1 / xDifference);
-					}
-					else {
-						scaleFactor = 1 - (1 / yDifference);
-					}
-
-					targetPosition = transform.position + ((targetPosition - position) * scaleFactor);
-				}
-
-				var vectorToTarget = targetPosition - position;
-				var vectorToTargetAlongPlane = GetHorizontalComponent(vectorToTarget) + GetVerticalComponent(vectorToTarget);
-				var interpolatedPosition = Vector3.zero;
-				var xDelta = Mathf.Abs(vectorToTargetAlongPlane.x);
-				var yDelta = Mathf.Abs(vectorToTargetAlongPlane.y);
-				var zDelta = Mathf.Abs(vectorToTargetAlongPlane.z);
-				var xyzTotal = xDelta + yDelta + zDelta;
-				
-				interpolatedPosition.x = Mathf.SmoothDamp(position.x, targetPosition.x, ref velocity.x, damping, maxSpeed * (xDelta / xyzTotal));
-				interpolatedPosition.y = Mathf.SmoothDamp(position.y, targetPosition.y, ref velocity.y, damping, maxSpeed * (yDelta / xyzTotal));
-				interpolatedPosition.z = Mathf.SmoothDamp(position.z, targetPosition.z, ref velocity.z, damping, maxSpeed * (zDelta / xyzTotal));
-				transform.position = interpolatedPosition;
-			}
-			else {
-				velocity = Vector3.zero;
-			}
-
-
-			#if UNITY_EDITOR
-			if (drawDebugLines) {
-				lastCalculatedPosition = transform.position;
-				lastCalculatedIdealPosition = IdealCameraPosition();
-				lastCalculatedInfluence = TotalInfluence();
-				influencesForGizmoRendering = new Vector3[influences.Count];
-				influences.CopyTo(influencesForGizmoRendering);
-			}
-			#endif
-
-			if(!arrivalNotificationSent && panningToNewTarget && (targetPosition - position).sqrMagnitude <= arrivalNotificationDistanceSquared) {
-				if(OnNewTargetReached != null) OnNewTargetReached();
-				if(arrivedAtNewTargetCallback != null) {
-					arrivedAtNewTargetCallback();
-					arrivedAtNewTargetCallback = null;
-				}
-				arrivalNotificationSent = true;
-			}
+			velocity = Vector3.zero;
 		}
+
+
+		#if UNITY_EDITOR
+		if (drawDebugLines) {
+			lastCalculatedPosition = transform.position;
+			lastCalculatedIdealPosition = IdealCameraPosition();
+			lastCalculatedInfluence = TotalInfluence();
+			influencesForGizmoRendering = new Vector3[influences.Count];
+			influences.CopyTo(influencesForGizmoRendering);
+		}
+		#endif
+
+		if(!arrivalNotificationSent && panningToNewTarget && (targetPosition - position).sqrMagnitude <= arrivalNotificationDistanceSquared) {
+			if(OnNewTargetReached != null) OnNewTargetReached();
+			if(arrivedAtNewTargetCallback != null) {
+				arrivedAtNewTargetCallback();
+				arrivedAtNewTargetCallback = null;
+			}
+			arrivalNotificationSent = true;
+			panningToNewTarget = false;
+		}
+
 		influences.Clear();
 	}
 

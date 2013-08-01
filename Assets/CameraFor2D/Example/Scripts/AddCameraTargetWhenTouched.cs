@@ -21,7 +21,6 @@ public class AddCameraTargetWhenTouched : MonoBehaviour {
 	}
 
 	void OnTriggerEnter() {
-
 		if(removeTargetAfterDelay) {
 			if(triggerSlideAtTarget) {
 				cameraController.AddTarget(targets, moveSpeed, delay, revertMoveSpeed, StartSlide);
