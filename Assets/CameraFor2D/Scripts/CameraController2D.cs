@@ -331,6 +331,10 @@ public class CameraController2D : MonoBehaviour {
 		arrivalNotificationSent = false;
 	}
 
+	public void RemoveAllTargets() {
+		targetStack.Clear();
+	}
+
 	public void AddInfluence(Vector3 influence) {
 		influences.Add(influence);
 	}
